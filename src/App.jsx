@@ -10,10 +10,11 @@ import { createClient } from "@supabase/supabase-js";
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
-const BRANCHES = [
+const RAW_BRANCHES = [
   "포항시","경주시","김천시","안동시","구미시","영주시","영천시","상주시","문경시","경산시",
   "청송군","영양군","영덕군","청도군","고령군","성주군","칠곡군","예천군","봉화군","울진군"
-].map((n,i)=>({ id: i+1, name: n }));
+];
+const BRANCHES = RAW_BRANCHES.map((n,i)=>({ id: i+1, name: `한국교통장애인협회 ${n}지회` }));
 
 const USERS = [
   { id:"gbudc", pw:"gbudc", role:"admin" },
@@ -28,7 +29,7 @@ const USERS = [
 const STATUS = {
   NONE:     { key:"NONE",     label:"미제출",     color:"bg-neutral-300 text-neutral-900" },
   REPORT:   { key:"REPORT",   label:"보고서 제출", color:"bg-emerald-600/90 text-white" },
-  OFFICIAL: { key:"OFFICIAL", label:"공문 제출",  color:"bg-orange-500/90 text-white" }
+  OFFICIAL: { key:"OFFICIAL", label:"사유서 제출",   color:"bg-orange-500/90 text-white" }
 };
 
 // ----------------------------- Week 유틸 -----------------------------
@@ -363,6 +364,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
           <Btn variant="primary" onClick={onEdit}>수정</Btn>
+          <Btn className="text-red-600 border-red-200 hover:bg-red-50" onClick={async()=>{ if(!confirm('정말 삭제하시겠습니까?')) return; await store.deleteWeek(branch.id, week.id); onBack && onBack(); }}>삭제</Btn>
         </div>
       </div>
 
@@ -428,49 +430,20 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
           <thead className="bg-neutral-50/80 backdrop-blur supports-[backdrop-filter]:bg-neutral-50/60">
             <tr className="text-left text-neutral-700">
               <th className="px-5 py-3">주차</th>
-              <th className="px-5 py-3">상태</th>
               <th className="px-5 py-3">제목</th>
-              <th className="px-5 py-3">첨부</th>
               <th className="px-5 py-3">제출일시</th>
-              <th className="px-5 py-3">작업</th>
+              <th className="px-5 py-3 text-right">상태</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-200">
             {rows.map(({week,rec}, idx)=> (
               <tr key={week.id} className="odd:bg-neutral-50/40">
                 <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
-                <td className="px-5 py-4"><StatusChip statusKey={rec.status}/></td>
                 <td className="px-5 py-4 align-top min-h-[60px]">
                   <button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title || "(제목 없음)"}</button>
                 </td>
-                <td className="px-5 py-4 align-top text-sm">
-                  {(rec.files && rec.files.length) ? (
-                    <div className="flex flex-col gap-1 max-w-[300px]">
-                      {rec.files.map((f,i)=>{
-                        const isString = typeof f === "string";
-                        const path = isString ? f : f?.path;
-                        const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
-                        if (store.storeType === 'supabase' && path) {
-                          return (
-                            <button key={i}
-                              onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
-                              className="inline-flex items-center gap-2 px-2 py-1 border border-neutral-200 rounded-lg hover:bg-neutral-50 truncate text-left"
-                              title={name}
-                            >
-                              📎 <span className="truncate max-w-[240px]">{name}</span>
-                            </button>
-                          );
-                        }
-                        return <span key={i} className="text-neutral-700">📎 {name}</span>;
-                      })}
-                    </div>
-                  ) : <span className="text-neutral-400">—</span>}
-                </td>
                 <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
-                <td className="px-5 py-4 text-sm">
-                  <button className="underline mr-3 underline-offset-2 hover:text-neutral-900" onClick={()=>onOpenSubmit(week.id)}>수정</button>
-                  <button className="underline text-red-600 underline-offset-2 hover:text-red-700" onClick={()=>handleDelete(week.id)}>삭제</button>
-                </td>
+                <td className="px-5 py-4 text-right"><StatusChip statusKey={rec.status}/></td>
               </tr>
             ))}
           </tbody>
@@ -553,55 +526,62 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   return (
     <div className="space-y-4">
       <Card title={`${branch.name} — 보고서 제출`}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Field label="주차 선택"><Select value={week} onChange={e=>setWeek(e.target.value)}>{WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}</Select></Field>
-          <Field label="제목"><Input placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} /></Field>
-        </div>
+        <div className="space-y-5">
+          <Field label="주차 선택">
+            <Select value={week} onChange={e=>setWeek(e.target.value)}>
+              {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
+            </Select>
+          </Field>
 
-        <div className="flex flex-wrap gap-4 py-1">
-          {Object.values(STATUS).filter(s=>s.key!=="NONE").map(s=> (
-            <label key={s.key} className="inline-flex items-center gap-2 text-neutral-800">
-              <input type="radio" name="st" value={s.key} checked={status===s.key} onChange={e=>setStatus(e.target.value)} className="accent-emerald-600" />
-              {s.label}
-            </label>
-          ))}
-        </div>
+          <Field label="제목">
+            <Input placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} />
+          </Field>
 
-        <Field label="내용">
-          <Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} />
-        </Field>
+          <div className="flex flex-wrap gap-4 py-1">
+            {Object.values(STATUS).filter(s=>s.key!=="NONE").map(s=> (
+              <label key={s.key} className="inline-flex items-center gap-2 text-neutral-800">
+                <input type="radio" name="st" value={s.key} checked={status===s.key} onChange={e=>setStatus(e.target.value)} className="accent-emerald-600" />
+                {s.label}
+              </label>
+            ))}
+          </div>
 
-        <div
-          className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
-          onDragOver={e=>{e.preventDefault();}}
-          onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}
-        >
-          여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
-          <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))} /></div>
-        </div>
+          <Field label="내용">
+            <Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} />
+          </Field>
 
-        {errMsg && <div className="text-red-600 text-sm">{errMsg}</div>}
+          <div
+            className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
+            onDragOver={e=>{e.preventDefault();}}
+            onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}
+          >
+            여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
+            <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))} /></div>
+          </div>
 
-        <div className="rounded-xl border border-neutral-200 bg-white p-3">
-          <div className="font-semibold mb-2 text-sm text-neutral-900">첨부 미리보기</div>
-          {files && files.length ? (
-            <ul className="space-y-1">
-              {files.map((f,i)=>(
-                <li key={i} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-neutral-800 truncate max-w-[360px]">{f.name}</span>
-                    <span className="text-neutral-400">({Math.round((f.size||0)/1024)} KB)</span>
-                  </div>
-                  <button className="text-red-600 hover:text-red-700" onClick={()=>setFiles(prev=>prev.filter((_,idx)=>idx!==i))}>삭제</button>
-                </li>
-              ))}
-            </ul>
-          ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
-        </div>
+          {errMsg && <div className="text-red-600 text-sm">{errMsg}</div>}
 
-        <div className="flex gap-2 pt-2">
-          <Btn variant="primary" onClick={submit}>제출 저장</Btn>
-          <Btn onClick={onBack}>취소</Btn>
+          <div className="rounded-xl border border-neutral-200 bg-white p-3">
+            <div className="font-semibold mb-2 text-sm text-neutral-900">첨부 미리보기</div>
+            {files && files.length ? (
+              <ul className="space-y-1">
+                {files.map((f,i)=>(
+                  <li key={i} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-neutral-800 truncate max-w-[360px]">{f.name}</span>
+                      <span className="text-neutral-400">({Math.round((f.size||0)/1024)} KB)</span>
+                    </div>
+                    <button className="text-red-600 hover:text-red-700" onClick={()=>setFiles(prev=>prev.filter((_,idx)=>idx!==i))}>삭제</button>
+                  </li>
+                ))}
+              </ul>
+            ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Btn variant="primary" onClick={submit}>제출 저장</Btn>
+            <Btn onClick={onBack}>취소</Btn>
+          </div>
         </div>
       </Card>
     </div>
