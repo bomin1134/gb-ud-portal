@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 /*
-  GB-UD 지회 보고포털 — v0.2.0 (제목/상세 보기 추가 + 업로드 키 안전화)
+  GB-UD 지회 보고포털 — v0.3.0 (UI 리디자인: 명확한 대비/카드/포커스 링/지브라 테이블)
   - 관리자: gbudc / gbudc
   - 지회: gb001 ~ gb020 (비밀번호 동일)
   - .env.local 설정 시 Supabase LIVE, 미설정 시 메모리(DEMO)
@@ -26,9 +26,9 @@ const USERS = [
 ];
 
 const STATUS = {
-  NONE:     { key:"NONE",     label:"미제출",   color:"bg-neutral-300 text-neutral-800" },
-  REPORT:   { key:"REPORT",   label:"보고서 제출", color:"bg-emerald-300 text-emerald-950" },
-  OFFICIAL: { key:"OFFICIAL", label:"공문 제출",  color:"bg-orange-300 text-orange-950" }
+  NONE:     { key:"NONE",     label:"미제출",     color:"bg-neutral-300 text-neutral-900" },
+  REPORT:   { key:"REPORT",   label:"보고서 제출", color:"bg-emerald-600/90 text-white" },
+  OFFICIAL: { key:"OFFICIAL", label:"공문 제출",  color:"bg-orange-500/90 text-white" }
 };
 
 // ----------------------------- Week 유틸 -----------------------------
@@ -75,6 +75,54 @@ function fileNameFromPath(p){
   if(!p) return "파일";
   const parts = String(p).split("/");
   return parts[parts.length-1] || String(p);
+}
+
+// ----------------------------- 공용 컴포넌트 -----------------------------
+function Btn({children,onClick,variant="neutral",className="",type="button"}){
+  const base = "inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed";
+  const style = variant==="primary"
+    ? "bg-neutral-900 text-white hover:bg-neutral-800 shadow-sm"
+    : variant==="soft"
+      ? "bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200"
+      : "bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50";
+  return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
+}
+
+function Field({label,children,help}){
+  return (
+    <div className="space-y-2">
+      {label && <label className="text-sm font-semibold text-neutral-800">{label}</label>}
+      {children}
+      {help && <p className="text-xs text-neutral-500">{help}</p>}
+    </div>
+  );
+}
+
+function Input(props){
+  return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
+}
+function Textarea(props){
+  return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
+}
+function Select(props){
+  return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
+}
+
+function Card({title,actions,children}){
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200">
+        <h2 className="text-lg font-bold text-neutral-900">{title}</h2>
+        <div className="flex items-center gap-2">{actions}</div>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function StatusChip({statusKey}) {
+  const s=STATUS[statusKey]||STATUS.NONE;
+  return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>;
 }
 
 // ----------------------------- Store (Supabase or Memory) -----------------------------
@@ -234,18 +282,6 @@ function useStore(){
   };
 }
 
-// ----------------------------- 공통 UI -----------------------------
-function Btn({children,onClick,variant="neutral"}) {
-  const style = variant==="primary"
-    ? "bg-neutral-900 text-white px-3 py-1.5 rounded hover:bg-neutral-800"
-    : "border border-neutral-300 bg-white text-neutral-900 px-3 py-1.5 rounded hover:bg-neutral-50";
-  return <button onClick={onClick} className={style}>{children}</button>;
-}
-function StatusChip({statusKey}) {
-  const s=STATUS[statusKey]||STATUS.NONE;
-  return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs`}>● {s.label}</span>;
-}
-
 // ----------------------------- 로그인 -----------------------------
 function Login({onLogin}){
   const [id,setId]=useState(""); const [pw,setPw]=useState(""); const [err,setErr]=useState("");
@@ -256,18 +292,12 @@ function Login({onLogin}){
   };
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-6">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl border bg-white p-6">
-        <h1 className="text-2xl font-bold">GB-UD 지회 보고포털 로그인</h1>
-        <div>
-          <label className="block text-sm mb-1">아이디</label>
-          <input className="w-full rounded-md border px-3 py-2" value={id} onChange={e=>setId(e.target.value)} />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">비밀번호</label>
-          <input type="password" className="w-full rounded-md border px-3 py-2" value={pw} onChange={e=>setPw(e.target.value)} />
-        </div>
+      <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h1 className="text-2xl font-extrabold text-neutral-900">GB-UD 지회 보고포털 로그인</h1>
+        <Field label="아이디"><Input value={id} onChange={e=>setId(e.target.value)} /></Field>
+        <Field label="비밀번호"><Input type="password" value={pw} onChange={e=>setPw(e.target.value)} /></Field>
         {err && <div className="text-red-600 text-sm">{err}</div>}
-        <button className="w-full rounded-md bg-neutral-900 text-white py-2">로그인</button>
+        <Btn type="submit" variant="primary" className="w-full">로그인</Btn>
       </form>
     </div>
   );
@@ -293,29 +323,30 @@ function AdminDashboard({store,onOpenBranch}){
   if(loading) return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
 
   return (
-    <div className="p-6 space-y-4 mx-auto min-w-[1100px] max-w-[1400px]">
-      <h1 className="text-2xl font-bold">지회 보고 현황</h1>
-      <div className="grid grid-cols-4 gap-6 items-stretch">
-        {BRANCHES.map(b=>{
-          const r=recent[b.id]?.[0]||"NONE";
-          return (
-            <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border p-4 bg-white hover:shadow cursor-pointer">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="font-semibold text-lg">{b.name}</h2>
-                <span className="text-neutral-500 text-xs">자세히 ▶</span>
-              </div>
-              <div className="mb-2"><StatusChip statusKey={r}/></div>
-              <div className="flex items-center gap-1 text-[10px] text-neutral-600">최근 4주
-                <div className="flex items-center gap-1 ml-2">
-                  {(recent[b.id]||[]).map((s,i)=>
-                    <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
-                  )}
+    <div className="space-y-4">
+      <Card title="지회 보고 현황">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {BRANCHES.map(b=>{
+            const r=recent[b.id]?.[0]||"NONE";
+            return (
+              <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
+                  <span className="text-neutral-400 text-xs">자세히 ▶</span>
+                </div>
+                <div className="mb-3"><StatusChip statusKey={r}/></div>
+                <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
+                  <div className="flex items-center gap-1 ml-2">
+                    {(recent[b.id]||[]).map((s,i)=>
+                      <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -323,11 +354,11 @@ function AdminDashboard({store,onOpenBranch}){
 // ----------------------------- 상세 보기 -----------------------------
 function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
   return (
-    <div className="p-6 space-y-4 mx-auto min-w-[1100px] max-w-[1400px]">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Btn onClick={onBack}>↩ 목록</Btn>
-          <h1 className="text-2xl font-bold">{rec.title || "(제목 없음)"}</h1>
+          <Btn onClick={onBack} variant="soft">↩ 목록</Btn>
+          <h1 className="text-2xl font-extrabold text-neutral-900">{rec.title || "(제목 없음)"}</h1>
         </div>
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
@@ -335,12 +366,12 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         </div>
       </div>
 
-      <div className="rounded-xl border bg-white p-5 space-y-4">
+      <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm p-5 space-y-4">
         <div className="text-sm text-neutral-600">{branch.name} · {week.label}</div>
         <div className="text-sm text-neutral-600">제출일시: {rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</div>
-        <div className="whitespace-pre-wrap leading-relaxed min-h-[80px]">{rec.note || "(내용 없음)"}</div>
+        <div className="whitespace-pre-wrap leading-relaxed min-h-[80px] text-neutral-800">{rec.note || "(내용 없음)"}</div>
         <div>
-          <div className="font-semibold mb-2">첨부</div>
+          <div className="font-semibold mb-2 text-neutral-900">첨부</div>
           {(rec.files && rec.files.length) ? (
             <div className="flex flex-col gap-2">
               {rec.files.map((f,i)=>{
@@ -349,7 +380,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
                 const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
                 if (store.storeType==='supabase' && path) {
                   return (
-                    <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded hover:bg-neutral-50 w-fit"
+                    <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
                       onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
                     >📎 {name}</button>
                   );
@@ -383,38 +414,38 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
   };
 
   return (
-    <div className="p-6 space-y-6 mx-auto min-w-[1100px] max-w-[1400px]">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-2">
-          {isAdmin && <Btn onClick={onAdminBack}>↩ 뒤로가기</Btn>}
-          <h1 className="text-2xl font-bold">{branch.name} — 제출현황</h1>
+          {isAdmin && <Btn onClick={onAdminBack} variant="soft">↩ 뒤로가기</Btn>}
+          <h1 className="text-2xl font-extrabold text-neutral-900">{branch.name} — 제출현황</h1>
         </div>
         <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border bg-white">
-        <table className="w-full min-w-[1100px] text-base leading-relaxed">
-          <thead className="bg-neutral-50">
-            <tr className="text-left">
-              <th className="px-4 py-3">주차</th>
-              <th className="px-4 py-3">상태</th>
-              <th className="px-4 py-3">제목</th>
-              <th className="px-4 py-3">첨부</th>
-              <th className="px-4 py-3">제출일시</th>
-              <th className="px-4 py-3">작업</th>
+      <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+        <table className="w-full text-base leading-relaxed">
+          <thead className="bg-neutral-50/80 backdrop-blur supports-[backdrop-filter]:bg-neutral-50/60">
+            <tr className="text-left text-neutral-700">
+              <th className="px-5 py-3">주차</th>
+              <th className="px-5 py-3">상태</th>
+              <th className="px-5 py-3">제목</th>
+              <th className="px-5 py-3">첨부</th>
+              <th className="px-5 py-3">제출일시</th>
+              <th className="px-5 py-3">작업</th>
             </tr>
           </thead>
-          <tbody>
-            {rows.map(({week,rec})=> (
-              <tr key={week.id} className="border-t align-top">
-                <td className="px-4 py-4 whitespace-nowrap">{week.label}</td>
-                <td className="px-4 py-4"><StatusChip statusKey={rec.status}/></td>
-                <td className="px-4 py-4 align-top min-h-[60px]">
-                  <button className="underline" onClick={()=>onOpenDetail(week.id)}>{rec.title || "(제목 없음)"}</button>
+          <tbody className="divide-y divide-neutral-200">
+            {rows.map(({week,rec}, idx)=> (
+              <tr key={week.id} className="odd:bg-neutral-50/40">
+                <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
+                <td className="px-5 py-4"><StatusChip statusKey={rec.status}/></td>
+                <td className="px-5 py-4 align-top min-h-[60px]">
+                  <button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title || "(제목 없음)"}</button>
                 </td>
-                <td className="px-4 py-4 align-top text-xs">
+                <td className="px-5 py-4 align-top text-sm">
                   {(rec.files && rec.files.length) ? (
-                    <div className="flex flex-col gap-1 max-w-[260px]">
+                    <div className="flex flex-col gap-1 max-w-[300px]">
                       {rec.files.map((f,i)=>{
                         const isString = typeof f === "string";
                         const path = isString ? f : f?.path;
@@ -423,22 +454,22 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
                           return (
                             <button key={i}
                               onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
-                              className="inline-flex items-center gap-1 px-2 py-1 border rounded hover:bg-neutral-50 truncate text-left"
+                              className="inline-flex items-center gap-2 px-2 py-1 border border-neutral-200 rounded-lg hover:bg-neutral-50 truncate text-left"
                               title={name}
                             >
-                              📎 <span className="truncate max-w-[200px]">{name}</span>
+                              📎 <span className="truncate max-w-[240px]">{name}</span>
                             </button>
                           );
                         }
-                        return <span key={i} className="text-neutral-600">📎 {name}</span>;
+                        return <span key={i} className="text-neutral-700">📎 {name}</span>;
                       })}
                     </div>
-                  ) : "—"}
+                  ) : <span className="text-neutral-400">—</span>}
                 </td>
-                <td className="px-4 py-4">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
-                <td className="px-4 py-4 text-sm">
-                  <button className="underline mr-3" onClick={()=>onOpenSubmit(week.id)}>수정</button>
-                  <button className="underline text-red-600" onClick={()=>handleDelete(week.id)}>삭제</button>
+                <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
+                <td className="px-5 py-4 text-sm">
+                  <button className="underline mr-3 underline-offset-2 hover:text-neutral-900" onClick={()=>onOpenSubmit(week.id)}>수정</button>
+                  <button className="underline text-red-600 underline-offset-2 hover:text-red-700" onClick={()=>handleDelete(week.id)}>삭제</button>
                 </td>
               </tr>
             ))}
@@ -503,9 +534,6 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       alert(String(e?.message || e));
       setErrMsg("저장에 실패했습니다.");
       return;
-      console.error("setRecord failed:", e);
-      setErrMsg("저장에 실패했습니다.");
-      return;
     }
 
     setDone(true);
@@ -515,7 +543,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
 
   if(done){
     return (
-      <div className="p-6 space-y-3 mx-auto min-w-[1100px] max-w-[1400px]">
+      <div className="space-y-3">
         <p className="font-bold text-xl">제출 완료!</p>
         <Btn onClick={onBack} variant="primary">지회 화면으로</Btn>
       </div>
@@ -523,60 +551,59 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   }
 
   return (
-    <div className="p-6 space-y-4 mx-auto min-w-[1100px] max-w-[1400px]">
-      <h1 className="text-2xl font-bold">{branch.name} — 보고서 제출</h1>
+    <div className="space-y-4">
+      <Card title={`${branch.name} — 보고서 제출`}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Field label="주차 선택"><Select value={week} onChange={e=>setWeek(e.target.value)}>{WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}</Select></Field>
+          <Field label="제목"><Input placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} /></Field>
+        </div>
 
-      <label className="font-semibold">주차 선택</label>
-      <select value={week} onChange={e=>setWeek(e.target.value)}>
-        {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
-      </select>
+        <div className="flex flex-wrap gap-4 py-1">
+          {Object.values(STATUS).filter(s=>s.key!=="NONE").map(s=> (
+            <label key={s.key} className="inline-flex items-center gap-2 text-neutral-800">
+              <input type="radio" name="st" value={s.key} checked={status===s.key} onChange={e=>setStatus(e.target.value)} className="accent-emerald-600" />
+              {s.label}
+            </label>
+          ))}
+        </div>
 
-      <label className="font-semibold">제목</label>
-      <input className="w-full border rounded px-3 py-2" placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} />
+        <Field label="내용">
+          <Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} />
+        </Field>
 
-      <div className="flex gap-3">
-        {Object.values(STATUS).filter(s=>s.key!=="NONE").map(s=> (
-          <label key={s.key}>
-            <input type="radio" name="st" value={s.key} checked={status===s.key} onChange={e=>setStatus(e.target.value)} /> {s.label}
-          </label>
-        ))}
-      </div>
+        <div
+          className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
+          onDragOver={e=>{e.preventDefault();}}
+          onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}
+        >
+          여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
+          <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))} /></div>
+        </div>
 
-      <label className="font-semibold">내용</label>
-      <textarea rows={5} className="w-full border rounded p-2" placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} />
+        {errMsg && <div className="text-red-600 text-sm">{errMsg}</div>}
 
-      <div
-        className="border-2 border-dashed rounded-lg p-6 bg-neutral-50 text-sm"
-        onDragOver={e=>{e.preventDefault();}}
-        onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}
-      >
-        여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
-        <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))} /></div>
-      </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-3">
+          <div className="font-semibold mb-2 text-sm text-neutral-900">첨부 미리보기</div>
+          {files && files.length ? (
+            <ul className="space-y-1">
+              {files.map((f,i)=>(
+                <li key={i} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-neutral-800 truncate max-w-[360px]">{f.name}</span>
+                    <span className="text-neutral-400">({Math.round((f.size||0)/1024)} KB)</span>
+                  </div>
+                  <button className="text-red-600 hover:text-red-700" onClick={()=>setFiles(prev=>prev.filter((_,idx)=>idx!==i))}>삭제</button>
+                </li>
+              ))}
+            </ul>
+          ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
+        </div>
 
-      {errMsg && <div className="text-red-600 text-sm">{errMsg}</div>}
-
-      <div className="rounded-lg border bg-white p-3">
-        <div className="font-semibold mb-2 text-sm">첨부 미리보기</div>
-        {files && files.length ? (
-          <ul className="space-y-1">
-            {files.map((f,i)=>(
-              <li key={i} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-neutral-700 truncate max-w-[240px]">{f.name}</span>
-                  <span className="text-neutral-400">({Math.round((f.size||0)/1024)} KB)</span>
-                </div>
-                <button className="text-red-600" onClick={()=>setFiles(prev=>prev.filter((_,idx)=>idx!==i))}>삭제</button>
-              </li>
-            ))}
-          </ul>
-        ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
-      </div>
-
-      <div className="flex gap-2">
-        <Btn variant="primary" onClick={submit}>제출 저장</Btn>
-        <Btn onClick={onBack}>취소</Btn>
-      </div>
+        <div className="flex gap-2 pt-2">
+          <Btn variant="primary" onClick={submit}>제출 저장</Btn>
+          <Btn onClick={onBack}>취소</Btn>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -600,24 +627,25 @@ export default function App(){
   const bump=()=> setRefreshKey(k=>k+1);
 
   return (
-    <div className="min-h-screen bg-neutral-100">
-      <nav className="sticky top-0 bg-white border-b py-3">
-        <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 flex justify-between items-center">
-          <div className="font-bold flex items-center gap-2">GB-UD 지회 보고포털 (v0.2.0)
+    <div className="min-h-screen bg-gradient-to-b from-neutral-100 to-neutral-50">
+      <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-neutral-200">
+        <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 py-3 flex justify-between items-center">
+          <div className="font-extrabold tracking-tight text-neutral-900 flex items-center gap-3">
+            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.3</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${store.storeType==='supabase' ? 'border-emerald-500 text-emerald-700' : 'border-neutral-400 text-neutral-600'}`}>
               {store.storeType==='supabase' ? 'Supabase' : 'Demo'}
             </span>
           </div>
           {user && (
             <div className="flex gap-2 items-center text-sm">
-              <span>{user.role==="admin" ? "관리자" : branch.name}</span>
+              <span className="text-neutral-700">{user.role==="admin" ? "관리자" : branch.name}</span>
               <Btn onClick={logout}>로그아웃</Btn>
             </div>
           )}
         </div>
       </nav>
 
-      <main className="mx-auto min-w-[1100px] max-w-[1400px] px-10 py-8">
+      <main className="mx-auto min-w-[1100px] max-w-[1400px] px-10 py-8 space-y-6">
         {view==="LOGIN" && <Login onLogin={login} />}
 
         {view==="ADMIN" && (
