@@ -193,17 +193,27 @@ function useStore(){
         for(const f of (files||[])){
           // 안전한 업로드 키: ASCII만, 공백→_, 특수문자 제거, 길이 제한
           const origName = (f.name || "file").normalize("NFC");
-          const dot = origName.lastIndexOf(".");
-          const base = dot > -1 ? origName.slice(0, dot) : origName;
-          const ext  = dot > -1 ? origName.slice(dot) : "";
-          let safeBase = base
-            .replace(/\s+/g, "_")
-            .replace(/[^A-Za-z0-9._-]/g, "_")
-            .replace(/_+/g, "_")
-            .replace(/^_+|_+$/g, "")
-            .slice(-100);
-          const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0,10).toLowerCase();
-          const safeName = (safeBase || "file") + (safeExt || "");
+const dot = origName.lastIndexOf(".");
+const base = dot > -1 ? origName.slice(0, dot) : origName;
+const ext  = dot > -1 ? origName.slice(dot) : "";
+
+// 한글(가-힣), 영문/숫자, 점, 하이픈, 밑줄, 괄호, 공백 허용
+// 나머지는 _ 로 치환. 연속 _ 압축, 앞뒤 _/공백 제거, 길이 제한
+let safeBase = base
+  .replace(/[^\p{L}\p{N}.\-_\s()가-힣]/gu, "_")  // ← 핵심: 한글/문자/숫자 허용
+  .replace(/\s+/g, " ")
+  .trim()
+  .replace(/\s+/g, "_")
+  .replace(/_+/g, "_")
+  .slice(0, 100);
+
+// 확장자는 영문/숫자/점만, 소문자, 길이 제한
+const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0, 10).toLowerCase();
+
+// 혹시 전부 제거되어 비면 기본값
+if (!safeBase) safeBase = "file";
+
+const safeName = `${safeBase}${safeExt || ""}`;
           const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
           const { error } = await client.storage.from(bucket).upload(
             path,
