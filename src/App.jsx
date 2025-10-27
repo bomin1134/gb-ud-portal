@@ -1,16 +1,12 @@
 // src/App.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 /*
-  GB-UD 지회 보고포털 — v0.3.1 (files: text 저장 + 한글 파일명 표시)
-  - files 컬럼: text (단일 문자열)
-    └ 직렬화 규칙: "path|b64(name),path|b64(name),..."
-    └ 과거 데이터 호환: 값에 '|'가 없으면 "경로만"으로 판단하여 name=파일명추출
-  - Supabase Storage 키는 ASCII(uuid)로 안전하게 저장 + 다운로드 시 한글 파일명 지정
-  - 관리자: gbudc / gbudc
-  - 지회: gb001 ~ gb020 (비밀번호 동일)
-  - .env.local 설정 시 Supabase LIVE, 미설정 시 메모리(DEMO)
+  GB-UD 지회 보고포털 — v0.5.0
+  - 업로드 진행 모달/파일별 상태/전체 % 표시
+  - crypto.randomUUID()로 안전한 스토리지 키 생성 (uuid 패키지 불필요)
+  - Supabase가 없으면 메모리(DEMO) 모드
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
@@ -81,59 +77,13 @@ function fileNameFromPath(p){
   const parts = String(p).split("/");
   return parts[parts.length-1] || String(p);
 }
-
-// UTF-8 <-> base64 (브라우저 호환)
-const enc = new TextEncoder();
-const dec = new TextDecoder();
-function b64encodeUtf8(str){
-  const bytes = enc.encode(str);
-  let binary = "";
-  for (let i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary); // 표준 base64
-}
-function b64decodeUtf8(b64){
-  try {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
-    return dec.decode(bytes);
-  } catch { return ""; }
-}
-
-// files 직렬화/역직렬화 (text 컬럼)
-// 포맷: "path|b64(name),path|b64(name)"  (path에는 콤마가 없도록 설계)
-function serializeFiles(arr){
-  if(!Array.isArray(arr) || !arr.length) return "";
-  return arr.map(f=>{
-    const path = typeof f === 'string' ? f : (f?.path||"");
-    const name = typeof f === 'string' ? fileNameFromPath(f) : (f?.name||fileNameFromPath(path));
-    return `${path}|${b64encodeUtf8(name)}`;
-  }).join(',');
-}
-function parseFiles(textValue){
-  if(!textValue) return [];
-  // 과거 호환: '|'가 하나도 없으면 콤마로 split 후 path만 사용
-  if(!String(textValue).includes('|')){
-    return String(textValue).split(',').filter(Boolean).map(p=>({ name:fileNameFromPath(p), path:p }));
-  }
-  return String(textValue).split(',').filter(Boolean).map(token=>{
-    const idx = token.lastIndexOf('|');
-    if(idx === -1) return { name:fileNameFromPath(token), path:token };
-    const path = token.slice(0, idx);
-    const b64  = token.slice(idx+1);
-    const name = b64decodeUtf8(b64) || fileNameFromPath(path);
-    return { name, path };
-  });
-}
-
-// 안전한 스토리지 키 (ASCII uuid)
 function makeSafeKey(branchId, weekId, ext){
   const id = `gb${String(branchId).padStart(3,'0')}`;
   const cleanExt = (ext || '').replace(/[^A-Za-z0-9.]/g, '').slice(0,10).toLowerCase();
   const suffix = cleanExt && !cleanExt.startsWith('.') ? `.${cleanExt}` : cleanExt;
   const rand = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2));
   return `${id}/${weekId}/${rand}${suffix}`;
-  }
+}
 
 // ----------------------------- 공용 컴포넌트 -----------------------------
 function Btn({children,onClick,variant="neutral",className="",type="button"}){
@@ -183,6 +133,30 @@ function StatusChip({statusKey}) {
   return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>;
 }
 
+function Modal({open, title, children, footer}) {
+  if(!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-[640px] max-w-full rounded-2xl bg-white shadow-xl">
+        <div className="px-5 py-4 border-b flex items-center justify-between">
+          <h3 className="font-bold text-lg">{title}</h3>
+        </div>
+        <div className="p-5 max-h-[60vh] overflow-auto">{children}</div>
+        {footer && <div className="px-5 py-3 border-t bg-neutral-50">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function ProgressBar({value}) {
+  const v = Math.max(0, Math.min(100, Math.round(value || 0)));
+  return (
+    <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
+      <div className="h-full bg-emerald-600" style={{width: `${v}%`}} />
+    </div>
+  );
+}
+
 // ----------------------------- Store (Supabase or Memory) -----------------------------
 function useStore(){
   const url   = import.meta.env.VITE_SUPABASE_URL;
@@ -196,25 +170,37 @@ function useStore(){
       storeType:"supabase",
       async getRecord(branchId,weekId){
         const { data } = await client
-          .from(table).select("title,status,note,files,submitted_at")
+          .from(table).select("*")
           .eq("id",`${branchId}_${weekId}`)
           .maybeSingle();
         if(!data) return { title:"", status:"NONE", note:"", files:[], submittedAt:null };
-        const files = parseFiles(data.files);
+
+        const filesArr = Array.isArray(data.files)
+          ? data.files
+          : (typeof data.files === 'string' && data.files.length ? [data.files] : []);
+        const normalizedFiles = filesArr.map(f => {
+          if (typeof f === "string") {
+            const name = fileNameFromPath(f);
+            return { name, path: f };
+          }
+          return {
+            name: f?.name ?? (f?.path ? fileNameFromPath(f.path) : "파일"),
+            path: f?.path ?? null,
+          };
+        });
+
         return {
           title: data.title || "",
           status: data.status || "NONE",
           note: data.note || "",
-          files,
+          files: normalizedFiles,
           submittedAt: data.submitted_at || null
         };
       },
       async setRecord(branchId,weekId,rec){
-        // rec.files: [{name, path}] or string[]
-        const arr = Array.isArray(rec.files)
-          ? rec.files.map(f => (typeof f === 'string' ? { name:fileNameFromPath(f), path:f } : f)).filter(x=>x?.path)
-          : [];
-        const filesText = serializeFiles(arr);
+        const filesField = Array.isArray(rec.files)
+          ? rec.files.map(f => (typeof f === "string" ? f : f?.path)).filter(Boolean)
+          : rec.files ?? null;
         const payload = {
           id:`${branchId}_${weekId}`,
           branch_id: branchId,
@@ -222,7 +208,7 @@ function useStore(){
           title: rec.title ?? "",
           status: rec.status,
           note: rec.note,
-          files: filesText, // text 로 저장
+          files: filesField,
           submitted_at: rec.submittedAt
         };
         const { error } = await client.from(table).upsert(payload);
@@ -231,32 +217,33 @@ function useStore(){
           throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
         }
       },
-      async uploadFiles(branchId,weekId,files){
+      async uploadFiles(branchId,weekId,files,onProgress){
         const metas=[];
-        for(const f of (files||[])){
+        for (let i=0;i<(files||[]).length;i++){
+          const f = files[i];
+          onProgress && onProgress({ type:'start', index:i, file:f });
+
           const origName = (f.name || "file").normalize("NFC");
           const dot = origName.lastIndexOf(".");
           const ext  = dot > -1 ? origName.slice(dot+1) : "";
-          const safeKey = makeSafeKey(branchId, weekId, ext);
+          const path = makeSafeKey(branchId, weekId, ext);
+
           const { error } = await client.storage.from(bucket).upload(
-            safeKey,
-            f,
-            { upsert:true, contentType: f.type || undefined }
+            path, f, { upsert:true, contentType: f.type || undefined }
           );
           if(!error){
-            metas.push({ name: origName, path: safeKey });
+            metas.push({ name: origName, path });
+            onProgress && onProgress({ type:'done', index:i, file:f, ok:true, bytes:(f.size||0) });
           } else {
             console.error("storage.upload error", error);
             alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
+            onProgress && onProgress({ type:'done', index:i, file:f, ok:false, bytes:0 });
           }
         }
         return metas; // [{name, path}]
       },
-      async getFileUrl(file){
-        // file: {path, name}
-        const path = typeof file === 'string' ? file : file?.path;
-        const name = typeof file === 'string' ? fileNameFromPath(file) : (file?.name || fileNameFromPath(path));
-        const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60, { download: name });
+      async getFileUrl(path){
+        const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
         return data?.signedUrl || null;
       },
       async deleteWeek(branchId,weekId){
@@ -270,7 +257,7 @@ function useStore(){
           title: "",
           status:"NONE",
           note:"",
-          files: "",
+          files: [],
           submitted_at: null
         });
       }
@@ -290,22 +277,27 @@ function useStore(){
         return n;
       });
     },
-    async uploadFiles(b,w,files){
+    async uploadFiles(b,w,files,onProgress){
       if(!files?.length) return [];
       const metas=[];
+      for(let i=0;i<files.length;i++){
+        const f=files[i];
+        onProgress && onProgress({ type:'start', index:i, file:f });
+        const url=URL.createObjectURL(f);
+        metas.push({ name:f.name, path:url });
+        onProgress && onProgress({ type:'done', index:i, file:f, ok:true, bytes:(f.size||0) });
+      }
       setMap(p=>{
         const n=new Map(p);
         const key=`${b}_${w}`;
         const prev=n.get(key)||{title:"", status:"NONE", note:"", files:[], submittedAt:null};
         const prevList = prev.files || [];
-        const added = Array.from(files).map(f=>({ name:f.name, size:f.size, url:URL.createObjectURL(f), path:f.name }));
-        metas.push(...added);
-        n.set(key, { ...prev, files:[...prevList, ...added] });
+        n.set(key, { ...prev, files:[...prevList, ...metas] });
         return n;
       });
-      return metas; // [{name, size, url, path}]
+      return metas;
     },
-    async getFileUrl(file){ return typeof file === 'string' ? file : (file?.url || "#"); },
+    async getFileUrl(path){ return path; },
     async deleteWeek(b,w){
       setMap(p=>{
         const n=new Map(p);
@@ -397,7 +389,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
           <Btn variant="primary" onClick={onEdit}>수정</Btn>
-          {/* 삭제 버튼 */}
+          <Btn className="text-red-600 border-red-200 hover:bg-red-50" onClick={async()=>{ if(!confirm('정말 삭제하시겠습니까?')) return; await store.deleteWeek(branch.id, week.id); onBack && onBack(); }}>삭제</Btn>
         </div>
       </div>
 
@@ -410,13 +402,17 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
           {(rec.files && rec.files.length) ? (
             <div className="flex flex-col gap-2">
               {rec.files.map((f,i)=>{
-                const path = typeof f === 'string' ? f : f?.path;
-                const name = typeof f === 'string' ? fileNameFromPath(f) : (f?.name || fileNameFromPath(path));
-                return (
-                  <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
-                    onClick={async()=>{ const u=await store.getFileUrl({path, name}); if(u) window.open(u,'_blank'); }}
-                  >📎 {name}</button>
-                );
+                const isString = typeof f === "string";
+                const path = isString ? f : f?.path;
+                const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
+                if (store.storeType==='supabase' && path) {
+                  return (
+                    <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
+                      onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
+                    >📎 {name}</button>
+                  );
+                }
+                return <span key={i} className="text-neutral-600 text-sm">📎 {name}</span>;
               })}
             </div>
           ) : <div className="text-neutral-500">첨부 없음</div>}
@@ -486,6 +482,13 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [done,setDone]=useState(false);
   const [errMsg,setErrMsg]=useState("");
 
+  // 업로드 모달 상태
+  const [upOpen, setUpOpen] = useState(false);
+  const [upItems, setUpItems] = useState([]);   // [{name,size,status}]
+  const [upDoneBytes, setUpDoneBytes] = useState(0);
+  const totalBytes = useMemo(() => upItems.reduce((s,i)=>s+(i.size||0), 0), [upItems]);
+  const percent = totalBytes ? (upDoneBytes / totalBytes) * 100 : 0;
+
   useEffect(()=>{(async()=>{
     const rec=await store.getRecord(branch.id,week);
     if(rec){ setTitle(rec.title||""); setStatus(rec.status||"REPORT"); setNote(rec.note||""); }
@@ -495,11 +498,31 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
     const prev = await store.getRecord(branch.id, week);
     const prevFiles = Array.isArray(prev?.files) ? prev.files : [];
 
+    // 업로드 진행창 초기화
+    if (files?.length) {
+      setUpItems(files.map(f=>({ name:f.name, size:f.size||0, status:'대기' })));
+      setUpDoneBytes(0);
+      setUpOpen(true);
+    }
+
     let uploadedMetas = [];
     try{
       if(files?.length && store.uploadFiles){
-        uploadedMetas = await store.uploadFiles(branch.id, week, files); // [{name, path}]
-        if (files.length > 0 && uploadedMetas.length === 0) {
+        uploadedMetas = await store.uploadFiles(
+          branch.id,
+          week,
+          files,
+          (ev)=>{
+            if(ev?.type==='start'){
+              setUpItems(prev=> prev.map((it,idx)=> idx===ev.index ? {...it, status:'업로드중'} : it));
+            }
+            if(ev?.type==='done'){
+              setUpItems(prev=> prev.map((it,idx)=> idx===ev.index ? {...it, status: ev.ok?'완료':'실패'} : it));
+              if (ev.ok) setUpDoneBytes(v=> v + (ev.bytes||0));
+            }
+          }
+        );
+        if (store.storeType === 'supabase' && files.length > 0 && uploadedMetas.length === 0) {
           alert('업로드가 시도되었지만 저장된 파일 메타가 비었습니다. (버킷/정책/경로 확인)');
         }
       }
@@ -508,28 +531,31 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       setErrMsg("파일 업로드는 실패했지만 제목/상태/내용은 저장합니다.");
     }
 
-    // 병합 (path 기준 중복 제거)
-    const prevArr = (prevFiles||[]).map(f=> (typeof f==='string'? {name:fileNameFromPath(f), path:f} : f)).filter(x=>x?.path);
-    const newArr  = (uploadedMetas||[]).map(m=> ({name:m.name, path:m.path}));
-    const mergedMap = new Map();
-    [...prevArr, ...newArr].forEach(x=>{ if(x?.path) mergedMap.set(x.path, {name:x.name, path:x.path}); });
-    const merged = Array.from(mergedMap.values());
+    const prevPaths = (Array.isArray(prevFiles) ? prevFiles : [])
+      .map(f => (typeof f === "string" ? f : f?.path))
+      .filter(Boolean);
+    const newPaths = (Array.isArray(uploadedMetas) ? uploadedMetas : [])
+      .map(m => m?.path)
+      .filter(Boolean);
+    const filesToSave = Array.from(new Set([...prevPaths, ...newPaths]));
 
     try{
       await store.setRecord(branch.id, week, {
         title,
         status,
         note,
-        files: merged,
+        files: filesToSave,
         submittedAt: new Date().toISOString()
       });
     } catch (e) {
       console.error("setRecord failed:", e);
       alert(String(e?.message || e));
       setErrMsg("저장에 실패했습니다.");
+      setUpOpen(false);
       return;
     }
 
+    setUpOpen(false);
     setDone(true);
     onSuccess && onSuccess();
     onBack && onBack();
@@ -605,6 +631,47 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
           </div>
         </div>
       </Card>
+
+      {/* 업로드 진행 모달 */}
+      <Modal
+        open={upOpen}
+        title="첨부파일 업로드 중…"
+        footer={
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-neutral-600">창을 닫지 말고 잠시만 기다려주세요.</div>
+            <Btn disabled>취소 (비활성)</Btn>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">전체 진행률</div>
+            <div className="text-sm font-mono">{Math.round(percent)}%</div>
+          </div>
+          <ProgressBar value={percent} />
+          <div className="text-xs text-neutral-500">
+            {upItems.filter(i=>i.status==='완료').length} / {upItems.length} 개 완료
+            {totalBytes ? ` · ${(upDoneBytes/1024/1024).toFixed(1)}MB / ${(totalBytes/1024/1024).toFixed(1)}MB` : null}
+          </div>
+          <div className="divide-y border rounded-lg">
+            {upItems.map((it,idx)=>(
+              <div key={idx} className="px-3 py-2 flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="truncate text-sm">{it.name}</div>
+                  <div className="text-xs text-neutral-500">{Math.round((it.size||0)/1024)} KB</div>
+                </div>
+                <div className="text-sm">
+                  {it.status==='대기' && <span className="text-neutral-500">대기</span>}
+                  {it.status==='업로드중' && <span className="text-emerald-700">업로드중…</span>}
+                  {it.status==='완료' && <span className="text-emerald-700">완료</span>}
+                  {it.status==='실패' && <span className="text-red-600">실패</span>}
+                </div>
+              </div>
+            ))}
+            {upItems.length===0 && <div className="px-3 py-6 text-center text-neutral-500 text-sm">첨부가 없습니다.</div>}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -632,7 +699,7 @@ export default function App(){
       <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-neutral-200">
         <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 py-3 flex justify-between items-center">
           <div className="font-extrabold tracking-tight text-neutral-900 flex items-center gap-3">
-            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.3.1-text</span>
+            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.5</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${store.storeType==='supabase' ? 'border-emerald-500 text-emerald-700' : 'border-neutral-400 text-neutral-600'}`}>
               {store.storeType==='supabase' ? 'Supabase' : 'Demo'}
             </span>
