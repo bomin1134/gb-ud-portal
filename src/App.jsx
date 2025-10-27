@@ -67,7 +67,7 @@ function serializeFilesForDB(files){
 }
 
 // ----------------------------- 공용 컴포넌트 -----------------------------
-function Btn({children,onClick,variant="neutral",className="",type="button"}){ const base="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"; const style=variant==="primary"?"bg-neutral-900 text-white hover:bg-neutral-800 shadow-sm":variant==="soft"?"bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200":"bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50"; return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>; }
+function Btn({children,onClick,variant="neutral",className="",type="button"}){ const base="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"; const style=variant==="primary"?"bg-neutral-900 text-white hover:bg-neutral-800 shadow-sm":variant==="soft"?"bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200":variant==="danger"?"bg-red-600 text-white hover:bg-red-700 shadow-sm":"bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50"; return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>; }
 function Field({label,children,help}){ return (<div className="space-y-2">{label&&<label className="text-sm font-semibold text-neutral-800">{label}</label>}{children}{help&&<p className="text-xs text-neutral-500">{help}</p>}</div>); }
 function Input(props){ return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
 function Textarea(props){ return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
@@ -79,9 +79,9 @@ function Tabs({tabs,active,onChange}){ return (<div className="flex items-center
 // 중앙 로딩 모달
 function LoadingModal({text="로딩 중…"}){
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
-      <div className="relative bg-white rounded-2xl shadow-lg px-6 py-5 flex items-center gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center h-screen w-screen">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+      <div className="relative z-10 bg-white rounded-2xl shadow-lg px-6 py-5 flex items-center gap-4">
         <div className="w-8 h-8 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin" />
         <div className="text-neutral-700 font-medium">{text}</div>
       </div>
@@ -92,13 +92,20 @@ function LoadingModal({text="로딩 중…"}){
 // 파일 미리보기/다운로드 헬퍼를 포함한 작은 미리보기 모달
 function PreviewModal({open, onClose, item}){
   if(!open || !item) return null;
+  const handleClose = ()=>{
+    try{ if(item?.url && item.url.startsWith('blob:')) URL.revokeObjectURL(item.url); }catch(e){}
+    onClose && onClose();
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl max-w-[90vw] max-h-[90vh] overflow-auto p-4">
+      <div className="fixed inset-0 bg-black/40" onClick={handleClose} />
+      <div className="relative z-10 bg-white rounded-xl shadow-xl max-w-[90vw] max-h-[90vh] overflow-auto p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="font-semibold">{item.name}</div>
-          <button className="text-sm text-neutral-500" onClick={onClose}>닫기</button>
+          <div className="flex items-center gap-2">
+            <button className="text-sm text-neutral-700" onClick={()=>{ if(item?.url && item.url.startsWith('blob:')){ const a=document.createElement('a'); a.href=item.url; a.download=item.name; document.body.appendChild(a); a.click(); a.remove(); } }}>다운로드</button>
+            <button className="text-sm text-neutral-500" onClick={handleClose}>닫기</button>
+          </div>
         </div>
         <div className="max-w-[80vw] max-h-[70vh]">
           {item.type==='image' && <img src={item.url} alt={item.name} className="max-w-full max-h-[70vh] object-contain" />}
@@ -419,6 +426,22 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
     }catch(e){ console.error(e); alert('삭제에 실패했습니다.'); }
   };
 
+  const handleFileDownload = async (f)=>{
+    try{
+      const isString = typeof f === "string";
+      const path = isString ? f : f?.path;
+      const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
+      const url = await store.getFileUrl(path);
+      if(!url) return alert('파일을 불러올 수 없습니다.');
+      if(!url.startsWith('http')){ window.open(url,'_blank'); return; }
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=blobUrl; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(blobUrl), 5000);
+    }catch(e){ console.error(e); alert('다운로드에 실패했습니다.'); }
+  };
+
   return (
     <div className="space-y-4">
       <PreviewModal open={previewOpen} onClose={()=>{ setPreviewOpen(false); setPreviewItem(null); }} item={previewItem} />
@@ -431,7 +454,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
           <Btn variant="primary" onClick={onEdit}>수정</Btn>
-          <Btn onClick={handleDelete} variant="soft">삭제</Btn>
+          <Btn onClick={handleDelete} variant="danger">삭제</Btn>
         </div>
       </div>
 
@@ -450,7 +473,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
                 return (
                   <div key={i} className="flex items-center gap-2">
                     <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit" onClick={()=>handleFileOpen(f)} disabled={downloading}>📎 {name}</button>
-                    <button className="text-sm text-neutral-500" onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}>원본 열기</button>
+                    <button className="text-sm text-neutral-500" onClick={()=>handleFileDownload(f)}>다운로드</button>
                   </div>
                 );
               })}
@@ -537,7 +560,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
     setSaving(true); setProgress(0);
     try{
       const prev = await store.getRecord(branch.id, week);
-      const prevPaths = normalizeFilesField(prev?.files).map(x=>x.path).filter(Boolean);
+      const prevMetas = normalizeFilesField(prev?.files); // [{name,path}]
 
       // 파일 업로드: 진행률 애니메이션(천천히 증가)
       let uploadedMetas=[]; const total=(files?.length||0);
@@ -552,8 +575,11 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
         }
       }
 
-      const newPaths = (uploadedMetas||[]).map(m=>m.path).filter(Boolean);
-      const filesToSave = uniq([...prevPaths, ...newPaths]);
+      // Merge previous metas and uploaded metas, unique by path
+      const mapByPath = new Map();
+      for(const m of (prevMetas||[])){ if(m?.path) mapByPath.set(m.path, { name:m.name, path:m.path }); }
+      for(const m of (uploadedMetas||[])){ if(m?.path) mapByPath.set(m.path, { name:m.name, path:m.path }); }
+      const filesToSave = Array.from(mapByPath.values());
 
       await store.setRecord(branch.id, week, { title, status, note, files: filesToSave, submittedAt: new Date().toISOString() });
       alert('제출 완료!');
