@@ -1,10 +1,13 @@
-// src/App.jsx
-import React, { useEffect, useState, useRef } from "react";
+// src/App.jsx — v0.6 (관리자 탭 + 공지사항 + 속도개선)
+import React, { useEffect, useState, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 /*
-  GB-UD 지회 보고포털 — v0.5 (업로드 진행 모달 + 부드러운 퍼센트)
-  - .env.local 설정 시 Supabase, 미설정 시 메모리(DEMO)
+  변경점 (v0.6)
+  1) 관리자 화면 탭 추가: [지회 보고 현황] / [주차별 제출현황] / [공지사항]
+  2) 공지사항(관리자만 작성, 지회 열람) 기능 추가 (notices 테이블 필요)
+  3) 속도 개선: 다건 조회를 단일 쿼리(in)로 묶고, 클라이언트 매핑
+  4) files 컬럼(text/jsonb/text[]) 호환 저장/읽기 그대로 유지
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
@@ -31,98 +34,47 @@ const STATUS = {
 };
 
 // ----------------------------- Week 유틸 -----------------------------
-function startOfWeekMonday(d){
-  const x=new Date(d);
-  const n=x.getDay();
-  const diff=(n===0?-6:1-n);
-  x.setDate(x.getDate()+diff);
-  x.setHours(0,0,0,0);
-  return x;
-}
+function startOfWeekMonday(d){ const x=new Date(d); const n=x.getDay(); const diff=(n===0?-6:1-n); x.setDate(x.getDate()+diff); x.setHours(0,0,0,0); return x; }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function koreanOrdinal(n){ return ["첫째","둘째","셋째","넷째","다섯째"][n-1]||`${n}째`; }
-function ymdLocal(d){
-  const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,"0");
-  const day=String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
-}
-function weekLabelKorean(monday){
-  const y=monday.getFullYear();
-  const mIdx=monday.getMonth();
-  const firstDay = new Date(y, mIdx, 1);
-  const toMon   = (8 - firstDay.getDay()) % 7;
-  const firstMon= new Date(y, mIdx, 1 + toMon);
-  const diffDays = Math.floor((monday - firstMon) / (1000*60*60*24));
-  const ordinal = diffDays < 0 ? 1 : Math.floor(diffDays/7) + 1;
-  const m = mIdx + 1;
-  return `${y} ${m}월 ${koreanOrdinal(ordinal)}주`;
-}
-function makeWeeks(c=12){
-  const w=[]; let cur=startOfWeekMonday(new Date());
-  for(let i=0;i<c;i++){
-    const s=new Date(cur); const e=addDays(s,6);
-    w.push({ id: ymdLocal(s), label: weekLabelKorean(s), start:s, end:e });
-    cur=addDays(cur,-7);
-  }
-  return w;
-}
+function ymdLocal(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
+function weekLabelKorean(monday){ const y=monday.getFullYear(); const mIdx=monday.getMonth(); const firstDay = new Date(y, mIdx, 1); const toMon = (8-firstDay.getDay())%7; const firstMon = new Date(y, mIdx, 1+toMon); const diffDays=Math.floor((monday-firstMon)/(1000*60*60*24)); const ordinal = diffDays<0?1:Math.floor(diffDays/7)+1; const m=mIdx+1; return `${y} ${m}월 ${koreanOrdinal(ordinal)}주`; }
+function makeWeeks(c=12){ const w=[]; let cur=startOfWeekMonday(new Date()); for(let i=0;i<c;i++){ const s=new Date(cur); const e=addDays(s,6); w.push({ id: ymdLocal(s), label: weekLabelKorean(s), start:s, end:e }); cur=addDays(cur,-7);} return w; }
 const WEEKS = makeWeeks(12);
 
 // ----------------------------- helpers -----------------------------
-function fileNameFromPath(p){
-  if(!p) return "파일";
-  const parts = String(p).split("/");
-  return parts[parts.length-1] || String(p);
+function fileNameFromPath(p){ if(!p) return "파일"; const parts=String(p).split("/"); return parts[parts.length-1]||String(p); }
+function uniq(arr){ return Array.from(new Set(arr)); }
+
+// files 호환 파서/직렬화
+function normalizeFilesField(raw){
+  if(!raw) return [];
+  if(Array.isArray(raw)){
+    if(raw.every(v=>typeof v==='string')) return raw.map(p=>({name:fileNameFromPath(p), path:p}));
+    return raw.map(o=>({ name:o?.name ?? (o?.path?fileNameFromPath(o.path):'파일'), path:o?.path ?? (typeof o==='string'?o:null), url:o?.url ?? null }));
+  }
+  if(typeof raw==='string'){
+    const s=raw.trim();
+    if((s.startsWith('[')&&s.endsWith(']'))||(s.startsWith('{')&&s.endsWith('}'))){ try{ return normalizeFilesField(JSON.parse(s)); }catch{ /* ignore */ } }
+    if(s.includes('\n')||s.includes('|')){ return s.split(/\n|\|/).map(v=>v.trim()).filter(Boolean).map(p=>({name:fileNameFromPath(p), path:p})); }
+    return [{name:fileNameFromPath(s), path:s}];
+  }
+  return [];
 }
-const uuid = () =>
-  (typeof crypto !== "undefined" && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+function serializeFilesForDB(files){
+  const arr=(files||[]).map(f=> typeof f==='string'? {name:fileNameFromPath(f), path:f} : {name:f?.name ?? (f?.path?fileNameFromPath(f.path):'파일'), path:f?.path ?? null});
+  return JSON.stringify(arr);
+}
 
 // ----------------------------- 공용 컴포넌트 -----------------------------
-function Btn({children,onClick,variant="neutral",className="",type="button"}){
-  const base = "inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed";
-  const style = variant==="primary"
-    ? "bg-neutral-900 text-white hover:bg-neutral-800 shadow-sm"
-    : variant==="soft"
-      ? "bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200"
-      : "bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50";
-  return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
-}
-function Field({label,children,help}){
-  return (
-    <div className="space-y-2">
-      {label && <label className="text-sm font-semibold text-neutral-800">{label}</label>}
-      {children}
-      {help && <p className="text-xs text-neutral-500">{help}</p>}
-    </div>
-  );
-}
-function Input(props){
-  return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
-}
-function Textarea(props){
-  return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
-}
-function Select(props){
-  return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
-}
-function Card({title,actions,children}){
-  return (
-    <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200">
-        <h2 className="text-lg font-bold text-neutral-900">{title}</h2>
-        <div className="flex items-center gap-2">{actions}</div>
-      </div>
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-function StatusChip({statusKey}) {
-  const s=STATUS[statusKey]||STATUS.NONE;
-  return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>;
-}
+function Btn({children,onClick,variant="neutral",className="",type="button"}){ const base="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"; const style=variant==="primary"?"bg-neutral-900 text-white hover:bg-neutral-800 shadow-sm":variant==="soft"?"bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200":"bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50"; return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>; }
+function Field({label,children,help}){ return (<div className="space-y-2">{label&&<label className="text-sm font-semibold text-neutral-800">{label}</label>}{children}{help&&<p className="text-xs text-neutral-500">{help}</p>}</div>); }
+function Input(props){ return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
+function Textarea(props){ return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
+function Select(props){ return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
+function Card({title,actions,children}){ return (<div className="rounded-2xl border border-neutral-200 bg-white shadow-sm"><div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200"><h2 className="text-lg font-bold text-neutral-900">{title}</h2><div className="flex items-center gap-2">{actions}</div></div><div className="p-5">{children}</div></div>); }
+function StatusChip({statusKey}){ const s=STATUS[statusKey]||STATUS.NONE; return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>; }
+function Tabs({tabs,active,onChange}){ return (<div className="flex items-center gap-2 border-b pb-2 mb-4">{tabs.map(t=> <button key={t.key} onClick={()=>onChange(t.key)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${active===t.key? 'bg-neutral-900 text-white':'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}>{t.label}</button>)}</div>); }
 
 // ----------------------------- Store (Supabase or Memory) -----------------------------
 function useStore(){
@@ -130,196 +82,257 @@ function useStore(){
   const key   = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const bucket= import.meta.env.VITE_SUPABASE_BUCKET || "reports";
   const table = import.meta.env.VITE_SUPABASE_TABLE  || "submissions";
+  const noticeTable = import.meta.env.VITE_SUPABASE_NOTICE_TABLE || "notices";
 
   if(url && key){
     const client=createClient(url,key);
     return {
       storeType:"supabase",
+      // 단건 조회
       async getRecord(branchId,weekId){
-        const { data } = await client
-          .from(table).select("*")
-          .eq("id",`${branchId}_${weekId}`)
-          .maybeSingle();
+        const { data } = await client.from(table).select("*").eq("id",`${branchId}_${weekId}`).maybeSingle();
         if(!data) return { title:"", status:"NONE", note:"", files:[], submittedAt:null };
-
-        const filesArr = Array.isArray(data.files)
-          ? data.files
-          : (typeof data.files === 'string' && data.files.length ? [data.files] : []);
-        const normalizedFiles = filesArr.map(f => {
-          if (typeof f === "string") return { name: fileNameFromPath(f), path: f };
-          return {
-            name: f?.name ?? (f?.path ? fileNameFromPath(f.path) : "파일"),
-            path: f?.path ?? null,
-            url:  f?.url ?? null,
-          };
-        });
-
-        return {
-          title: data.title || "",
-          status: data.status || "NONE",
-          note: data.note || "",
-          files: normalizedFiles,
-          submittedAt: data.submitted_at || null
-        };
+        return { title:data.title||"", status:data.status||"NONE", note:data.note||"", files:normalizeFilesField(data.files), submittedAt:data.submitted_at||null };
+      },
+      // 다건 조회(속도개선): 한 번에 가져와서 매핑
+      async getRecordsForBranchWeeks(branchId, weekIds){
+        const { data, error } = await client
+          .from(table)
+          .select("week_id,status,title,submitted_at,files")
+          .eq("branch_id", branchId)
+          .in("week_id", weekIds);
+        if(error){ console.error(error); return new Map(); }
+        const map = new Map();
+        for(const r of (data||[])){
+          map.set(r.week_id, { title:r.title||"", status:r.status||"NONE", note:"", files:normalizeFilesField(r.files), submittedAt:r.submitted_at||null });
+        }
+        return map;
+      },
+      // 관리자 요약용: 여러 지회 x 특정 주차들 (최근 4주 등)
+      async getStatusesMatrix(branchIds, weekIds){
+        const { data, error } = await client
+          .from(table)
+          .select("branch_id,week_id,status")
+          .in("branch_id", branchIds)
+          .in("week_id", weekIds);
+        if(error){ console.error(error); return []; }
+        return data||[]; // [{branch_id, week_id, status}]
       },
       async setRecord(branchId,weekId,rec){
-        const filesField = Array.isArray(rec.files)
-          ? rec.files.map(f => (typeof f === "string" ? f : f?.path)).filter(Boolean)
-          : rec.files ?? null;
-        const payload = {
-          id:`${branchId}_${weekId}`,
-          branch_id: branchId,
-          week_id: weekId,
-          title: rec.title ?? "",
-          status: rec.status,
-          note: rec.note,
-          files: filesField,
-          submitted_at: rec.submittedAt
-        };
+        const filesField = serializeFilesForDB(rec.files);
+        const payload = { id:`${branchId}_${weekId}`, branch_id:branchId, week_id:weekId, title:rec.title??"", status:rec.status, note:rec.note, files:filesField, submitted_at:rec.submittedAt };
         const { error } = await client.from(table).upsert(payload);
-        if (error) throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
+        if(error){ console.error("DB upsert error", error, payload); throw new Error("DB 저장 실패: "+(error.message||JSON.stringify(error))); }
       },
       async uploadFiles(branchId,weekId,files){
         const metas=[];
         for(const f of (files||[])){
-          // 원래 확장자 유지 + 안전한 파일명
-          const orig = (f.name || "file");
-          const dot  = orig.lastIndexOf(".");
-          const ext  = dot > -1 ? orig.slice(dot).replace(/[^A-Za-z0-9.]/g,"").toLowerCase() : "";
-          const safe = uuid() + (ext || "");
-          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safe}`;
-          const { error } = await client.storage.from(bucket).upload(path, f, { upsert:true, contentType:f.type || undefined });
-          if(!error){ metas.push({ name: orig, path }); }
-          else { console.error("storage.upload error", error); alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error))); }
+          const orig=f.name||"file";
+          const dot=orig.lastIndexOf(".");
+          const ext= dot>-1 ? orig.slice(dot).replace(/[^A-Za-z0-9.]/g,"").toLowerCase() : "";
+          const safe = crypto?.randomUUID ? crypto.randomUUID()+ext : (Math.random().toString(36).slice(2)+Date.now().toString(36))+ext;
+          const path=`gb${String(branchId).padStart(3,"0")}/${weekId}/${safe}`;
+          const { error } = await client.storage.from(bucket).upload(path, f, { upsert:true, contentType:f.type||undefined });
+          if(error){ console.error("storage.upload error", error); alert("Storage 업로드 실패: "+(error?.message||JSON.stringify(error))); }
+          else { metas.push({ name:orig, path }); }
         }
-        return metas; // [{name, path}]
+        return metas;
       },
-      async getFileUrl(path){
-        const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
-        return data?.signedUrl || null;
-      },
+      async getFileUrl(path){ const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60); return data?.signedUrl||null; },
       async deleteWeek(branchId,weekId){
         const prefix=`gb${String(branchId).padStart(3,"0")}/${weekId}`;
         const { data:list } = await client.storage.from(bucket).list(prefix);
         if(list?.length){ await client.storage.from(bucket).remove(list.map(f=>`${prefix}/${f.name}`)); }
-        await client.from(table).upsert({
-          id:`${branchId}_${weekId}`,
-          branch_id: branchId,
-          week_id: weekId,
-          title: "",
-          status:"NONE",
-          note:"",
-          files: [],
-          submitted_at: null
-        });
+        await client.from(table).upsert({ id:`${branchId}_${weekId}`, branch_id:branchId, week_id:weekId, title:"", status:"NONE", note:"", files:serializeFilesForDB([]), submitted_at:null });
+      },
+      // --- 공지사항 ---
+      async listNotices(limit=20){
+        const { data, error } = await client.from(noticeTable).select("id,title,body,author,created_at").order("created_at", { ascending:false }).limit(limit);
+        if(error){ console.error(error); return []; }
+        return data||[];
+      },
+      async createNotice(title, body, author){
+        const { error } = await client.from(noticeTable).insert({ title, body, author });
+        if(error){ console.error(error); throw new Error(error.message||"공지 저장 실패"); }
       }
     };
   }
 
-  // 메모리(DEMO)
-  const [map,setMap] = useState(new Map());
+  // 데모 스토어 (간단)
+  const [map,setMap]=useState(new Map());
+  const [notices,setNotices]=useState([]);
   return {
-    storeType:"memory",
-    async getRecord(b,w){ return map.get(`${b}_${w}`) || { title:"", status:"NONE", note:"", files:[], submittedAt:null }; },
-    async setRecord(b,w,r){
-      setMap(p=>{
-        const n=new Map(p);
-        const prev=n.get(`${b}_${w}`)||{};
-        n.set(`${b}_${w}`, { ...prev, ...r });
-        return n;
-      });
-    },
-    async uploadFiles(b,w,files){
-      if(!files?.length) return [];
-      const metas=[];
-      setMap(p=>{
-        const n=new Map(p);
-        const key=`${b}_${w}`;
-        const prev=n.get(key)||{title:"", status:"NONE", note:"", files:[], submittedAt:null};
-        const prevList = prev.files || [];
-        const added = Array.from(files).map(f=>({ name:f.name, size:f.size, url:URL.createObjectURL(f) }));
-        metas.push(...added);
-        n.set(key, { ...prev, files:[...prevList, ...added] });
-        return n;
-      });
-      return metas;
-    },
-    async getFileUrl(path){ return path; },
-    async deleteWeek(b,w){
-      setMap(p=>{
-        const n=new Map(p);
-        n.set(`${b}_${w}`, { title:"", status:"NONE", note:"", files:[], submittedAt:null });
-        return n;
-      });
-    }
+    storeType:"demo",
+    async getRecord(b,w){ return map.get(`${b}_${w}`)||{title:"",status:"NONE",note:"",files:[],submittedAt:null}; },
+    async getRecordsForBranchWeeks(b,weekIds){ const m=new Map(); for(const wk of weekIds){ const r=map.get(`${b}_${wk}`); if(r) m.set(wk,r);} return m; },
+    async getStatusesMatrix(branchIds,weekIds){ const rows=[]; for(const bid of branchIds){ for(const wk of weekIds){ const r=map.get(`${bid}_${wk}`); if(r) rows.push({branch_id:bid, week_id:wk, status:r.status}); }} return rows; },
+    async setRecord(b,w,r){ setMap(p=>{ const n=new Map(p); const prev=n.get(`${b}_${w}`)||{}; n.set(`${b}_${w}`, {...prev,...r}); return n; }); },
+    async uploadFiles(b,w,files){ return Array.from(files||[]).map(f=>({name:f.name, path:`demo://${f.name}`})); },
+    async getFileUrl(p){ return p; },
+    async deleteWeek(b,w){ setMap(p=>{ const n=new Map(p); n.set(`${b}_${w}`, {title:"",status:"NONE",note:"",files:[],submittedAt:null}); return n;}); },
+    async listNotices(){ return notices; },
+    async createNotice(title,body,author){ setNotices(p=>[{id:Date.now(), title, body, author, created_at:new Date().toISOString()}, ...p]); }
   };
 }
 
 // ----------------------------- 로그인 -----------------------------
 function Login({onLogin}){
   const [id,setId]=useState(""); const [pw,setPw]=useState(""); const [err,setErr]=useState("");
-  const submit=(e)=>{ e.preventDefault();
-    const u=USERS.find(v=>v.id===id && v.pw===pw);
-    if(!u){ setErr("아이디 또는 비밀번호가 올바르지 않습니다."); return; }
-    onLogin(u);
-  };
+  const submit=(e)=>{ e.preventDefault(); const u=USERS.find(v=>v.id===id&&v.pw===pw); if(!u){ setErr("아이디 또는 비밀번호가 올바르지 않습니다."); return;} onLogin(u); };
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-6">
       <form onSubmit={submit} className="w-full max-w-sm space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-extrabold text-neutral-900">GB-UD 지회 보고포털 로그인</h1>
         <Field label="아이디"><Input value={id} onChange={e=>setId(e.target.value)} /></Field>
         <Field label="비밀번호"><Input type="password" value={pw} onChange={e=>setPw(e.target.value)} /></Field>
-        {err && <div className="text-red-600 text-sm">{err}</div>}
+        {err&&<div className="text-red-600 text-sm">{err}</div>}
         <Btn type="submit" variant="primary" className="w-full">로그인</Btn>
       </form>
     </div>
   );
 }
 
-// ----------------------------- 관리자 대시보드 -----------------------------
-function AdminDashboard({store,onOpenBranch}){
-  const [recent,setRecent]=useState({});
-  const [loading,setLoading]=useState(true);
-  useEffect(()=>{(async()=>{
-    const rec={};
-    for(const b of BRANCHES){
-      const arr=[];
-      for(const w of WEEKS.slice(0,4)){
-        const r=await store.getRecord(b.id,w.id);
-        arr.push(r.status || "NONE");
-      }
-      rec[b.id]=arr;
-    }
-    setRecent(rec); setLoading(false);
-  })();},[store]);
+// ----------------------------- 공지사항 -----------------------------
+function NoticeBoard({store,isAdmin}){
+  const [items,setItems]=useState([]);
+  const [title,setTitle]=useState("");
+  const [body,setBody]=useState("");
 
-  if(loading) return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
+  const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
+  useEffect(()=>{ load(); },[store]);
+
+  const submit=async()=>{
+    if(!title.trim()||!body.trim()) return alert('제목/내용을 입력하세요');
+    try{ await store.createNotice(title.trim(), body.trim(), 'admin'); setTitle(""); setBody(""); await load(); }
+    catch(e){ alert(e.message||'공지 저장 실패'); }
+  };
 
   return (
     <div className="space-y-4">
-      <Card title="지회 보고 현황">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {BRANCHES.map(b=>{
-            const r=recent[b.id]?.[0]||"NONE";
-            return (
-              <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
-                  <span className="text-neutral-400 text-xs">자세히 ▶</span>
-                </div>
-                <div className="mb-3"><StatusChip statusKey={r}/></div>
-                <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
-                  <div className="flex items-center gap-1 ml-2">
-                    {(recent[b.id]||[]).map((s,i)=>
-                      <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {isAdmin && (
+        <Card title="공지 작성">
+          <div className="space-y-3">
+            <Field label="제목"><Input value={title} onChange={e=>setTitle(e.target.value)} /></Field>
+            <Field label="내용"><Textarea rows={4} value={body} onChange={e=>setBody(e.target.value)} /></Field>
+            <Btn variant="primary" onClick={submit}>등록</Btn>
+          </div>
+        </Card>
+      )}
+
+      <Card title="공지 목록">
+        <ul className="divide-y divide-neutral-200">
+          {(items||[]).map(n=> (
+            <li key={n.id} className="py-3">
+              <div className="font-semibold text-neutral-900">{n.title}</div>
+              <div className="text-sm text-neutral-500">{new Date(n.created_at).toLocaleString()} · {n.author||'관리자'}</div>
+              <div className="mt-2 whitespace-pre-wrap leading-relaxed">{n.body}</div>
+            </li>
+          ))}
+          {(!items||items.length===0)&&<li className="py-6 text-neutral-500">등록된 공지가 없습니다.</li>}
+        </ul>
       </Card>
+    </div>
+  );
+}
+
+// ----------------------------- 관리자 대시보드 -----------------------------
+function AdminDashboard({store,onOpenBranch}){
+  const [tab,setTab]=useState('overview'); // overview | weekly | notice
+
+  // overview: 최근 4주 상태칩 요약(기존 카드)
+  const [recentMap,setRecentMap]=useState({});
+  const [loadingOverview,setLoadingOverview]=useState(true);
+  useEffect(()=>{(async()=>{
+    setLoadingOverview(true);
+    const weekIds=WEEKS.slice(0,4).map(w=>w.id);
+    const branchIds=BRANCHES.map(b=>b.id);
+    const rows=await store.getStatusesMatrix(branchIds, weekIds); // [{branch_id,week_id,status}]
+    const grouped={};
+    for(const b of BRANCHES){ grouped[b.id]=weekIds.map(()=>"NONE"); }
+    for(const r of rows){ const wi=weekIds.indexOf(r.week_id); if(wi>-1){ grouped[r.branch_id][wi]=r.status||"NONE"; } }
+    setRecentMap(grouped); setLoadingOverview(false);
+  })();},[store]);
+
+  // weekly: 특정 주차 선택 → 지회별 상태 리스트
+  const [selectedWeek,setSelectedWeek]=useState(WEEKS[0].id);
+  const [weeklyRows,setWeeklyRows]=useState([]);
+  const [loadingWeekly,setLoadingWeekly]=useState(false);
+  useEffect(()=>{(async()=>{
+    setLoadingWeekly(true);
+    const branchIds=BRANCHES.map(b=>b.id);
+    const rows=await store.getStatusesMatrix(branchIds, [selectedWeek]);
+    const map=new Map(rows.map(r=>[r.branch_id, r.status||"NONE"]));
+    const list=BRANCHES.map(b=>({ branch:b, status: map.get(b.id)||"NONE" }));
+    setWeeklyRows(list); setLoadingWeekly(false);
+  })();},[store, selectedWeek]);
+
+  return (
+    <div className="space-y-4">
+      <Tabs
+        tabs={[{key:'overview',label:'지회 보고 현황'},{key:'weekly',label:'주차별 제출현황'},{key:'notice',label:'공지사항'}]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {tab==='overview' && (
+        loadingOverview ? <div className="p-6 text-neutral-500">데이터 불러오는 중…</div> : (
+          <Card title="지회 보고 현황 (최근 4주)">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {BRANCHES.map(b=>{
+                const arr=recentMap[b.id]||[]; const r=arr[0]||"NONE";
+                return (
+                  <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
+                      <span className="text-neutral-400 text-xs">자세히 ▶</span>
+                    </div>
+                    <div className="mb-3"><StatusChip statusKey={r}/></div>
+                    <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
+                      <div className="flex items-center gap-1 ml-2">
+                        {(arr||[]).map((s,i)=> <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )
+      )}
+
+      {tab==='weekly' && (
+        <Card title="주차별 제출현황">
+          <div className="flex items-center gap-3 mb-4">
+            <Select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)}>
+              {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
+            </Select>
+          </div>
+          {loadingWeekly ? <div className="text-neutral-500">불러오는 중…</div> : (
+            <div className="rounded-xl border border-neutral-200 overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-neutral-50">
+                  <tr className="text-left text-sm text-neutral-700">
+                    <th className="px-4 py-2">지회</th>
+                    <th className="px-4 py-2">상태</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-200">
+                  {weeklyRows.map(({branch,status})=> (
+                    <tr key={branch.id} className="odd:bg-neutral-50/40">
+                      <td className="px-4 py-2">{branch.name}</td>
+                      <td className="px-4 py-2"><StatusChip statusKey={status}/></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {tab==='notice' && (
+        <NoticeBoard store={store} isAdmin={true} />
+      )}
     </div>
   );
 }
@@ -336,7 +349,6 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
           <Btn variant="primary" onClick={onEdit}>수정</Btn>
-          <Btn className="text-red-600 border-red-200 hover:bg-red-50" onClick={async()=>{ if(!confirm('정말 삭제하시겠습니까?')) return; await store.deleteWeek(branch.id, week.id); onBack && onBack(); }}>삭제</Btn>
         </div>
       </div>
 
@@ -352,14 +364,11 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
                 const isString = typeof f === "string";
                 const path = isString ? f : f?.path;
                 const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
-                if (store.storeType==='supabase' && path) {
-                  return (
-                    <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
-                      onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
-                    >📎 {name}</button>
-                  );
-                }
-                return <span key={i} className="text-neutral-600 text-sm">📎 {name}</span>;
+                return (
+                  <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
+                    onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
+                  >📎 {name}</button>
+                );
               })}
             </div>
           ) : <div className="text-neutral-500">첨부 없음</div>}
@@ -373,11 +382,10 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
   const [rows,setRows]=useState([]);
   useEffect(()=>{(async()=>{
-    const arr=[];
-    for(const w of WEEKS){
-      const r=await store.getRecord(branch.id,w.id);
-      arr.push({week:w,rec:r});
-    }
+    // 속도개선: 주차 12개 데이터를 in() 한방으로
+    const weekIds=WEEKS.map(w=>w.id);
+    const map = await store.getRecordsForBranchWeeks(branch.id, weekIds);
+    const arr=WEEKS.map(w=>({ week:w, rec: map.get(w.id)||{title:"",status:"NONE",note:"",files:[],submittedAt:null} }));
     setRows(arr);
   })();},[store,branch.id,refreshKey]);
 
@@ -393,7 +401,7 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
 
       <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
         <table className="w-full text-base leading-relaxed">
-          <thead className="bg-neutral-50/80 backdrop-blur supports-[backdrop-filter]:bg-neutral-50/60">
+          <thead className="bg-neutral-50/80">
             <tr className="text-left text-neutral-700">
               <th className="px-5 py-3">주차</th>
               <th className="px-5 py-3">제목</th>
@@ -405,9 +413,7 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
             {rows.map(({week,rec})=> (
               <tr key={week.id} className="odd:bg-neutral-50/40">
                 <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
-                <td className="px-5 py-4">
-                  <button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title || "(제목 없음)"}</button>
-                </td>
+                <td className="px-5 py-4"><button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title||"(제목 없음)"}</button></td>
                 <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
                 <td className="px-5 py-4 text-right"><StatusChip statusKey={rec.status}/></td>
               </tr>
@@ -426,118 +432,42 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [status,setStatus]=useState("REPORT");
   const [note,setNote]=useState("");
   const [files,setFiles]=useState([]);
-  const [done,setDone]=useState(false);
-  const [errMsg,setErrMsg]=useState("");
-
-  // 업로드 모달/진행률 상태
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState("");
-  const [uploadTotal, setUploadTotal] = useState(0);
-  const [uploadDone, setUploadDone] = useState(0);
-  const [displayProgress, setDisplayProgress] = useState(0);
-  const [targetProgress, setTargetProgress] = useState(0);
-  const progressTimerRef = useRef(null);
+  const [saving,setSaving]=useState(false);
+  const [progress,setProgress]=useState(0);
 
   useEffect(()=>{(async()=>{
     const rec=await store.getRecord(branch.id,week);
     if(rec){ setTitle(rec.title||""); setStatus(rec.status||"REPORT"); setNote(rec.note||""); }
   })();},[branch.id,week,store]);
 
-  // displayProgress를 1%씩 targetProgress로 보간
-  useEffect(() => {
-    if (!isUploading) return;
-    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-    progressTimerRef.current = setInterval(() => {
-      setDisplayProgress((p) => {
-        const cap = (uploadDone === uploadTotal && uploadTotal > 0) ? 100 : 99;
-        if (p >= Math.min(targetProgress, cap)) return p;
-        return Math.min(p + 1, Math.min(targetProgress, cap));
-      });
-    }, 60);
-    return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
-  }, [isUploading, targetProgress, uploadDone, uploadTotal]);
-
-  const beginUploadUI = (total) => {
-    setIsUploading(true);
-    setUploadTotal(total);
-    setUploadDone(0);
-    setUploadMsg(total ? `0/${total} 파일 업로드 준비…` : "");
-    setDisplayProgress(0);
-    setTargetProgress(0);
-  };
-  const bumpTargetProgress = (done,total) => {
-    const next = Math.floor((done/Math.max(total,1))*100);
-    setTargetProgress((p)=>Math.max(p,next));
-    setUploadMsg(`${done}/${total} 파일 업로드 중…`);
-  };
-  const endUploadUI = () => {
-    setUploadDone(uploadTotal);
-    setTargetProgress(100);
-    setUploadMsg(`업로드 완료`);
-    setTimeout(()=>{ setIsUploading(false); if (progressTimerRef.current) clearInterval(progressTimerRef.current); }, 400);
-  };
-
   const submit = async () => {
-    const prev = await store.getRecord(branch.id, week);
-    const prevFiles = Array.isArray(prev?.files) ? prev.files : [];
-
-    let uploadedMetas = [];
+    setSaving(true); setProgress(0);
     try{
-      const total = Array.isArray(files) ? files.length : 0;
-      beginUploadUI(total);
-      uploadedMetas = [];
-      if(total && store.uploadFiles){
-        let doneCnt = 0;
-        for (const f of files) {
+      const prev = await store.getRecord(branch.id, week);
+      const prevPaths = normalizeFilesField(prev?.files).map(x=>x.path).filter(Boolean);
+
+      // 파일 업로드: 진행률 애니메이션(천천히 증가)
+      let uploadedMetas=[]; const total=(files?.length||0);
+      if(total>0){
+        let done=0; uploadedMetas=[];
+        for(const f of files){
           const metas = await store.uploadFiles(branch.id, week, [f]);
-          uploadedMetas.push(...metas);
-          doneCnt += 1;
-          setUploadDone(doneCnt);
-          bumpTargetProgress(doneCnt, total);
-        }
-        if (store.storeType === 'supabase' && total > 0 && uploadedMetas.length === 0) {
-          alert('업로드가 시도되었지만 저장된 파일 메타가 비었습니다. (버킷/정책/경로 확인)');
+          uploadedMetas.push(...metas); done+=1;
+          // 부드러운 진행률(파일당 100/total 까지 여러 단계 증가)
+          const target=Math.round((done/total)*100);
+          let cur=progress; while(cur<target){ cur+=1; setProgress(cur); await new Promise(r=>setTimeout(r,8)); }
         }
       }
-    }catch(e){
-      console.error("uploadFiles failed:", e);
-      setErrMsg("파일 업로드는 실패했지만 제목/상태/내용은 저장합니다.");
-    }
 
-    const prevPaths = (Array.isArray(prevFiles) ? prevFiles : [])
-      .map(f => (typeof f === "string" ? f : f?.path)).filter(Boolean);
-    const newPaths = (Array.isArray(uploadedMetas) ? uploadedMetas : [])
-      .map(m => m?.path).filter(Boolean);
-    const filesToSave = Array.from(new Set([...prevPaths, ...newPaths]));
+      const newPaths = (uploadedMetas||[]).map(m=>m.path).filter(Boolean);
+      const filesToSave = uniq([...prevPaths, ...newPaths]);
 
-    try{
-      await store.setRecord(branch.id, week, {
-        title, status, note,
-        files: filesToSave,
-        submittedAt: new Date().toISOString()
-      });
-    } catch (e) {
-      console.error("setRecord failed:", e);
-      alert(String(e?.message || e));
-      setErrMsg("저장에 실패했습니다.");
-      endUploadUI();
-      return;
-    }
-
-    endUploadUI();
-    setDone(true);
-    onSuccess && onSuccess();
-    onBack && onBack();
+      await store.setRecord(branch.id, week, { title, status, note, files: filesToSave, submittedAt: new Date().toISOString() });
+      alert('제출 완료!');
+      onSuccess && onSuccess(); onBack && onBack();
+    }catch(e){ console.error(e); alert(e.message||'저장 실패'); }
+    finally{ setSaving(false); setProgress(0); }
   };
-
-  if(done){
-    return (
-      <div className="space-y-3">
-        <p className="font-bold text-xl">제출 완료!</p>
-        <Btn onClick={onBack} variant="primary">지회 화면으로</Btn>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -549,9 +479,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
             </Select>
           </Field>
 
-          <Field label="제목">
-            <Input placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} />
-          </Field>
+          <Field label="제목"><Input placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} /></Field>
 
           <div className="flex flex-wrap gap-4 py-1">
             {Object.values(STATUS).filter(s=>s.key!=="NONE").map(s=> (
@@ -562,68 +490,25 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
             ))}
           </div>
 
-          <Field label="내용">
-            <Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} />
-          </Field>
+          <Field label="내용"><Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} /></Field>
 
-          <div
-            className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
-            onDragOver={e=>{e.preventDefault();}}
-            onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}
-          >
+          <div className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition" onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}>
             여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
             <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))} /></div>
           </div>
 
-          {errMsg && <div className="text-red-600 text-sm">{errMsg}</div>}
-
-          <div className="rounded-xl border border-neutral-200 bg-white p-3">
-            <div className="font-semibold mb-2 text-sm text-neutral-900">첨부 미리보기</div>
-            {files && files.length ? (
-              <ul className="space-y-1">
-                {files.map((f,i)=>(
-                  <li key={i} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-neutral-800 truncate max-w-[360px]">{f.name}</span>
-                      <span className="text-neutral-400">({Math.round((f.size||0)/1024)} KB)</span>
-                    </div>
-                    <button className="text-red-600 hover:text-red-700" onClick={()=>setFiles(prev=>prev.filter((_,idx)=>idx!==i))}>삭제</button>
-                  </li>
-                ))}
-              </ul>
-            ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
-          </div>
+          {saving && (
+            <div className="w-full bg-neutral-200 rounded-full h-3 overflow-hidden">
+              <div className="bg-emerald-500 h-3 transition-all" style={{ width: `${progress}%` }}></div>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
-            <Btn variant="primary" onClick={submit}>제출 저장</Btn>
-            <Btn onClick={onBack}>취소</Btn>
+            <Btn variant="primary" onClick={submit} disabled={saving}>{saving?`업로드 중... ${progress}%`:'제출 저장'}</Btn>
+            <Btn onClick={onBack} disabled={saving}>취소</Btn>
           </div>
         </div>
       </Card>
-
-      {/* 업로드 모달 */}
-      {isUploading && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30">
-          <div className="w-[520px] rounded-2xl border bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold">파일 업로드 중…</h3>
-              <span className="text-sm text-neutral-500">{uploadMsg}</span>
-            </div>
-            <div className="h-3 w-full rounded-full bg-neutral-200 overflow-hidden">
-              <div
-                className="h-full bg-emerald-600 transition-[width] duration-100 linear"
-                style={{ width: `${displayProgress}%` }}
-              />
-            </div>
-            <div className="mt-2 text-right text-sm text-neutral-600">
-              {displayProgress}% ( {uploadDone} / {uploadTotal} )
-            </div>
-            <p className="mt-3 text-xs text-neutral-500">
-              업로드가 끝날 때까지 창을 닫거나 새로고침하지 마세요.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -639,11 +524,7 @@ export default function App(){
   const [refreshKey,setRefreshKey]=useState(0);
 
   const logout=()=>{ setUser(null); setView("LOGIN"); };
-  const login=u=>{
-    setUser(u);
-    if(u.role==="admin") setView("ADMIN");
-    else { setBranch(BRANCHES.find(x=>x.id===u.branchId)); setView("BRANCH"); }
-  };
+  const login=u=>{ setUser(u); if(u.role==="admin") setView("ADMIN"); else { setBranch(BRANCHES.find(x=>x.id===u.branchId)); setView("BRANCH"); } };
   const bump=()=> setRefreshKey(k=>k+1);
 
   return (
@@ -651,7 +532,7 @@ export default function App(){
       <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-neutral-200">
         <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 py-3 flex justify-between items-center">
           <div className="font-extrabold tracking-tight text-neutral-900 flex items-center gap-3">
-            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.5</span>
+            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.6</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${store.storeType==='supabase' ? 'border-emerald-500 text-emerald-700' : 'border-neutral-400 text-neutral-600'}`}>
               {store.storeType==='supabase' ? 'Supabase' : 'Demo'}
             </span>
@@ -667,14 +548,12 @@ export default function App(){
 
       <main className="mx-auto min-w-[1100px] max-w-[1400px] px-10 py-8 space-y-6">
         {view==="LOGIN" && <Login onLogin={login} />}
-
         {view==="ADMIN" && (
           <AdminDashboard
             store={store}
             onOpenBranch={(b)=>{ setBranch(b); setView("BRANCH"); }}
           />
         )}
-
         {view==="BRANCH" && (
           <BranchHome
             branch={branch}
@@ -686,7 +565,6 @@ export default function App(){
             refreshKey={refreshKey}
           />
         )}
-
         {view==="SUBMIT" && (
           <BranchSubmit
             branch={branch}
@@ -696,7 +574,6 @@ export default function App(){
             onSuccess={bump}
           />
         )}
-
         {view==="DETAIL" && (
           <DetailWrapper
             branch={branch}
