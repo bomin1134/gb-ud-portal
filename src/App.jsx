@@ -193,37 +193,18 @@ function useStore(){
         for(const f of (files||[])){
           // 안전한 업로드 키: ASCII만, 공백→_, 특수문자 제거, 길이 제한
           const origName = (f.name || "file").normalize("NFC");
-const dot = origName.lastIndexOf(".");
-const base = dot > -1 ? origName.slice(0, dot) : origName;
-const ext  = dot > -1 ? origName.slice(dot) : "";
-
-// 1) 허용 문자: 한글/영문/숫자/공백/()-._  (그 외는 '_' 로 치환)
-let safeBase = base
-  .replace(/[^\p{L}\p{N}\s()._\-가-힣]/gu, "_")
-  .replace(/\s+/g, " ")
-  .trim()
-  .replace(/\s+/g, "_")
-  .replace(/_+/g, "_")
-  .slice(0, 100);
-
-// 2) 맨 앞의 점/밑줄/비문자 제거 → 파일명이 이상하게 시작하지 않도록 보정
-//    (예: "[붙임 1]..." → "_붙임_1..." 가 되는 것을 방지)
-safeBase = safeBase.replace(/^[^A-Za-z0-9가-힣]+/u, "");
-safeBase = safeBase.replace(/^[_\.]+/, "");
-
-// 3) 비어버렸으면 기본값 보정
-if (!safeBase) safeBase = "file";
-
-// 4) 확장자는 영숫자/점만, 소문자, 길이 제한
-const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0, 10).toLowerCase();
-
-// 최종 파일명
-const safeName = `${safeBase}${safeExt || ""}`;
-
-// (선택) 디버깅 로그
-// console.log("UPLOAD NAME:", { origName, safeBase, safeExt, safeName });
-
-const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
+          const dot = origName.lastIndexOf(".");
+          const base = dot > -1 ? origName.slice(0, dot) : origName;
+          const ext  = dot > -1 ? origName.slice(dot) : "";
+          let safeBase = base
+            .replace(/\s+/g, "_")
+            .replace(/[^A-Za-z0-9._-]/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(-100);
+          const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0,10).toLowerCase();
+          const safeName = (safeBase || "file") + (safeExt || "");
+          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
           const { error } = await client.storage.from(bucket).upload(
             path,
             f,
