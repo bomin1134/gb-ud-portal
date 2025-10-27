@@ -1,12 +1,17 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { v4 as uuidv4 } from "uuid";
 
 /*
-  GB-UD 지회 보고포털 — v0.5.0
-  - 속도 패치: 배치 쿼리(관리자/지회 화면 모두 1~2회 쿼리)
-  - 업로드 최적화: 병렬(동시성 3) + 중복스킵 + 진행률 표시
-  - UI/흐름은 기존과 동일
+  GB-UD 지회 보고포털 — v0.3.1 (files: text 저장 + 한글 파일명 표시)
+  - files 컬럼: text (단일 문자열)
+    └ 직렬화 규칙: "path|b64(name),path|b64(name),..."
+    └ 과거 데이터 호환: 값에 '|'가 없으면 "경로만"으로 판단하여 name=파일명추출
+  - Supabase Storage 키는 ASCII(uuid)로 안전하게 저장 + 다운로드 시 한글 파일명 지정
+  - 관리자: gbudc / gbudc
+  - 지회: gb001 ~ gb020 (비밀번호 동일)
+  - .env.local 설정 시 Supabase LIVE, 미설정 시 메모리(DEMO)
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
@@ -29,7 +34,7 @@ const USERS = [
 const STATUS = {
   NONE:     { key:"NONE",     label:"미제출",     color:"bg-neutral-300 text-neutral-900" },
   REPORT:   { key:"REPORT",   label:"보고서 제출", color:"bg-emerald-600/90 text-white" },
-  OFFICIAL: { key:"OFFICIAL", label:"사유서 제출",  color:"bg-orange-500/90 text-white" }
+  OFFICIAL: { key:"OFFICIAL", label:"사유서 제출",   color:"bg-orange-500/90 text-white" }
 };
 
 // ----------------------------- Week 유틸 -----------------------------
@@ -53,7 +58,7 @@ function weekLabelKorean(monday){
   const y=monday.getFullYear();
   const mIdx=monday.getMonth();
   const firstDay = new Date(y, mIdx, 1);
-  const toMon   = (8 - firstDay.getDay()) % 7;
+  const toMon   = (8 - firstDay.getDay()) % 7; // 첫 월요일까지 이동 일수
   const firstMon= new Date(y, mIdx, 1 + toMon);
   const diffDays = Math.floor((monday - firstMon) / (1000*60*60*24));
   const ordinal = diffDays < 0 ? 1 : Math.floor(diffDays/7) + 1;
@@ -78,6 +83,58 @@ function fileNameFromPath(p){
   return parts[parts.length-1] || String(p);
 }
 
+// UTF-8 <-> base64 (브라우저 호환)
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+function b64encodeUtf8(str){
+  const bytes = enc.encode(str);
+  let binary = "";
+  for (let i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary); // 표준 base64
+}
+function b64decodeUtf8(b64){
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+    return dec.decode(bytes);
+  } catch { return ""; }
+}
+
+// files 직렬화/역직렬화 (text 컬럼)
+// 포맷: "path|b64(name),path|b64(name)"  (path에는 콤마가 없도록 설계)
+function serializeFiles(arr){
+  if(!Array.isArray(arr) || !arr.length) return "";
+  return arr.map(f=>{
+    const path = typeof f === 'string' ? f : (f?.path||"");
+    const name = typeof f === 'string' ? fileNameFromPath(f) : (f?.name||fileNameFromPath(path));
+    return `${path}|${b64encodeUtf8(name)}`;
+  }).join(',');
+}
+function parseFiles(textValue){
+  if(!textValue) return [];
+  // 과거 호환: '|'가 하나도 없으면 콤마로 split 후 path만 사용
+  if(!String(textValue).includes('|')){
+    return String(textValue).split(',').filter(Boolean).map(p=>({ name:fileNameFromPath(p), path:p }));
+  }
+  return String(textValue).split(',').filter(Boolean).map(token=>{
+    const idx = token.lastIndexOf('|');
+    if(idx === -1) return { name:fileNameFromPath(token), path:token };
+    const path = token.slice(0, idx);
+    const b64  = token.slice(idx+1);
+    const name = b64decodeUtf8(b64) || fileNameFromPath(path);
+    return { name, path };
+  });
+}
+
+// 안전한 스토리지 키 (ASCII uuid)
+function makeSafeKey(branchId, weekId, ext){
+  const id = `gb${String(branchId).padStart(3,'0')}`;
+  const cleanExt = (ext || '').replace(/[^A-Za-z0-9.]/g, '').slice(0,10).toLowerCase();
+  const suffix = cleanExt && !cleanExt.startsWith('.') ? `.${cleanExt}` : cleanExt;
+  return `${id}/${weekId}/${uuidv4()}${suffix}`;
+}
+
 // ----------------------------- 공용 컴포넌트 -----------------------------
 function Btn({children,onClick,variant="neutral",className="",type="button"}){
   const base = "inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -88,16 +145,27 @@ function Btn({children,onClick,variant="neutral",className="",type="button"}){
       : "bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50";
   return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
 }
-function Field({label,children,help}){ return (
-  <div className="space-y-2">
-    {label && <label className="text-sm font-semibold text-neutral-800">{label}</label>}
-    {children}
-    {help && <p className="text-xs text-neutral-500">{help}</p>}
-  </div>
-); }
-function Input(props){ return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
-function Textarea(props){ return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
-function Select(props){ return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
+
+function Field({label,children,help}){
+  return (
+    <div className="space-y-2">
+      {label && <label className="text-sm font-semibold text-neutral-800">{label}</label>}
+      {children}
+      {help && <p className="text-xs text-neutral-500">{help}</p>}
+    </div>
+  );
+}
+
+function Input(props){
+  return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
+}
+function Textarea(props){
+  return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
+}
+function Select(props){
+  return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
+}
+
 function Card({title,actions,children}){
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
@@ -109,6 +177,7 @@ function Card({title,actions,children}){
     </div>
   );
 }
+
 function StatusChip({statusKey}) {
   const s=STATUS[statusKey]||STATUS.NONE;
   return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>;
@@ -121,35 +190,31 @@ function useStore(){
   const bucket= import.meta.env.VITE_SUPABASE_BUCKET || "reports";
   const table = import.meta.env.VITE_SUPABASE_TABLE  || "submissions";
 
-  const normalizeRecord = (r)=>({
-    title: r?.title || "",
-    status: r?.status || "NONE",
-    note: r?.note || "",
-    files: Array.isArray(r?.files)
-      ? r.files.map(p => (typeof p==="string" ? { name:fileNameFromPath(p), path:p } : p)).filter(Boolean)
-      : (typeof r?.files === "string" && r.files.length ? [{ name:fileNameFromPath(r.files), path:r.files }] : []),
-    submittedAt: r?.submitted_at || r?.submittedAt || null
-  });
-
   if(url && key){
     const client=createClient(url,key);
     return {
       storeType:"supabase",
-
       async getRecord(branchId,weekId){
-        const { data, error } = await client
+        const { data } = await client
           .from(table).select("title,status,note,files,submitted_at")
           .eq("id",`${branchId}_${weekId}`)
           .maybeSingle();
-        if(error) console.error(error);
         if(!data) return { title:"", status:"NONE", note:"", files:[], submittedAt:null };
-        return normalizeRecord(data);
+        const files = parseFiles(data.files);
+        return {
+          title: data.title || "",
+          status: data.status || "NONE",
+          note: data.note || "",
+          files,
+          submittedAt: data.submitted_at || null
+        };
       },
-
       async setRecord(branchId,weekId,rec){
-        const filesField = Array.isArray(rec.files)
-          ? rec.files.map(f => (typeof f === "string" ? f : f?.path)).filter(Boolean)
-          : rec.files ?? null;
+        // rec.files: [{name, path}] or string[]
+        const arr = Array.isArray(rec.files)
+          ? rec.files.map(f => (typeof f === 'string' ? { name:fileNameFromPath(f), path:f } : f)).filter(x=>x?.path)
+          : [];
+        const filesText = serializeFiles(arr);
         const payload = {
           id:`${branchId}_${weekId}`,
           branch_id: branchId,
@@ -157,187 +222,96 @@ function useStore(){
           title: rec.title ?? "",
           status: rec.status,
           note: rec.note,
-          files: filesField,
+          files: filesText, // text 로 저장
           submitted_at: rec.submittedAt
         };
         const { error } = await client.from(table).upsert(payload);
-        if (error) { console.error("DB upsert error", error, payload); throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error))); }
+        if (error) {
+          console.error("DB upsert error", error, payload);
+          throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
+        }
       },
-
-      // ========= 업로드: 병렬 3개 + 중복 스킵 + 진행률 콜백 =========
-      async uploadFiles(branchId,weekId,files,onProgress){
-        const list = Array.from(files || []);
-        if (!list.length) return [];
-
-        // (1) 중복 스킵(name+size)
-        const uniq=[]; const seen=new Set();
-        for(const f of list){ const k=`${f.name}|${f.size}`; if(seen.has(k)) continue; seen.add(k); uniq.push(f); }
-
-        // (2) 안전 파일명 (ASCII 근사)
-        const toKey = (name) => {
-          const dot = name.lastIndexOf(".");
-          const base = (dot>-1?name.slice(0,dot):name)
-            .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-            .replace(/[^A-Za-z0-9._\- ]/g,"_").replace(/\s+/g,"_")
-            .replace(/_+/g,"_").replace(/^[^A-Za-z0-9]+/,"").replace(/^[_\.]+/,"")
-            .slice(0,100) || "file";
-          const ext = (dot>-1?name.slice(dot):"").replace(/[^A-Za-z0-9.]/g,"").slice(0,10).toLowerCase();
-          return `${base}${ext||""}`;
-        };
-
-        const metas=[]; const CONCURRENCY=3;
-        let idx=0, doneBytes=0;
-        const totalBytes = uniq.reduce((s,f)=>s+(f.size||0),0);
-
-        const uploadOne = async (f) => {
-          const safeName = toKey(f.name || "file");
-          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
-          const { error } = await client.storage.from(bucket).upload(path, f, {
-            upsert:true, contentType: f.type || undefined
-          });
+      async uploadFiles(branchId,weekId,files){
+        const metas=[];
+        for(const f of (files||[])){
+          const origName = (f.name || "file").normalize("NFC");
+          const dot = origName.lastIndexOf(".");
+          const ext  = dot > -1 ? origName.slice(dot+1) : "";
+          const safeKey = makeSafeKey(branchId, weekId, ext);
+          const { error } = await client.storage.from(bucket).upload(
+            safeKey,
+            f,
+            { upsert:true, contentType: f.type || undefined }
+          );
           if(!error){
-            metas.push({ name:safeName, path });
-            doneBytes += (f.size || 0);
-            onProgress && onProgress(doneBytes, totalBytes);
-          }else{
+            metas.push({ name: origName, path: safeKey });
+          } else {
             console.error("storage.upload error", error);
+            alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
           }
-        };
-
-        const workers = Array.from({length: Math.min(CONCURRENCY, uniq.length)}).map(async ()=>{
-          while(idx<uniq.length){
-            const cur = uniq[idx++]; // 라운드로빈
-            await uploadOne(cur);
-          }
-        });
-        await Promise.allSettled(workers);
-        return metas;
+        }
+        return metas; // [{name, path}]
       },
-
-      async getFileUrl(path){
-        const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
+      async getFileUrl(file){
+        // file: {path, name}
+        const path = typeof file === 'string' ? file : file?.path;
+        const name = typeof file === 'string' ? fileNameFromPath(file) : (file?.name || fileNameFromPath(path));
+        const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60, { download: name });
         return data?.signedUrl || null;
       },
-
       async deleteWeek(branchId,weekId){
         const prefix=`gb${String(branchId).padStart(3,"0")}/${weekId}`;
         const { data:list } = await client.storage.from(bucket).list(prefix);
         if(list?.length){ await client.storage.from(bucket).remove(list.map(f=>`${prefix}/${f.name}`)); }
         await client.from(table).upsert({
-          id:`${branchId}_${weekId}`, branch_id: branchId, week_id: weekId,
-          title:"", status:"NONE", note:"", files:[], submitted_at:null
+          id:`${branchId}_${weekId}`,
+          branch_id: branchId,
+          week_id: weekId,
+          title: "",
+          status:"NONE",
+          note:"",
+          files: "",
+          submitted_at: null
         });
-      },
-
-      // ===================== 배치 API =====================
-      async getRecordsByBranchWeeks(branchId, weekIds){
-        const { data, error } = await client
-          .from(table)
-          .select("week_id, title, status, note, files, submitted_at")
-          .eq("branch_id", branchId)
-          .in("week_id", weekIds);
-        if (error) { console.error(error); return new Map(); }
-        const map = new Map();
-        for (const r of (data||[])) map.set(r.week_id, normalizeRecord(r));
-        return map;
-      },
-
-      async getStatusesByWeek(weekId){
-        const { data, error } = await client
-          .from(table)
-          .select("branch_id, status, submitted_at")
-          .eq("week_id", weekId);
-        if (error) { console.error(error); return new Map(); }
-        const map = new Map();
-        for (const r of (data||[])) map.set(r.branch_id, { status: r.status || "NONE", submittedAt: r.submitted_at || null });
-        return map;
-      },
-
-      async getStatusesForWeeks(weekIds){
-        const { data, error } = await client
-          .from(table)
-          .select("branch_id, week_id, status")
-          .in("week_id", weekIds);
-        if (error) { console.error(error); return new Map(); }
-        const map = new Map();
-        for (const r of (data||[])) {
-          if (!map.has(r.branch_id)) map.set(r.branch_id, new Map());
-          map.get(r.branch_id).set(r.week_id, r.status || "NONE");
-        }
-        return map;
       }
     };
   }
 
   // 메모리(DEMO)
-  const [mem,setMem] = useState(new Map());
-  const getKey=(b,w)=>`${b}_${w}`;
+  const [map,setMap] = useState(new Map());
   return {
     storeType:"memory",
-    async getRecord(b,w){ return mem.get(getKey(b,w)) || { title:"", status:"NONE", note:"", files:[], submittedAt:null }; },
+    async getRecord(b,w){ return map.get(`${b}_${w}`) || { title:"", status:"NONE", note:"", files:[], submittedAt:null }; },
     async setRecord(b,w,r){
-      setMem(p=>{
+      setMap(p=>{
         const n=new Map(p);
-        const prev=n.get(getKey(b,w))||{};
-        n.set(getKey(b,w), { ...prev, ...r });
+        const prev=n.get(`${b}_${w}`)||{};
+        n.set(`${b}_${w}`, { ...prev, ...r });
         return n;
       });
     },
-    async uploadFiles(b,w,files,onProgress){
+    async uploadFiles(b,w,files){
       if(!files?.length) return [];
       const metas=[];
-      setMem(p=>{
+      setMap(p=>{
         const n=new Map(p);
-        const key=getKey(b,w);
+        const key=`${b}_${w}`;
         const prev=n.get(key)||{title:"", status:"NONE", note:"", files:[], submittedAt:null};
         const prevList = prev.files || [];
-        const added = Array.from(files).map(f=>({ name:f.name, size:f.size, url:URL.createObjectURL(f) }));
-        const seen = new Set(prevList.map(x=>`${x.name}|${x.size}`));
-        const dedupAdded = added.filter(x=>{ const k=`${x.name}|${x.size}`; if(seen.has(k)) return false; seen.add(k); return true;});
-        metas.push(...dedupAdded);
-        n.set(key, { ...prev, files:[...prevList, ...dedupAdded] });
+        const added = Array.from(files).map(f=>({ name:f.name, size:f.size, url:URL.createObjectURL(f), path:f.name }));
+        metas.push(...added);
+        n.set(key, { ...prev, files:[...prevList, ...added] });
         return n;
       });
-      // 진행률 흉내(메모리모드)
-      let done=0, total=(files||[]).reduce((s,f)=>s+(f.size||0),0);
-      onProgress && onProgress(total, total);
-      return metas;
+      return metas; // [{name, size, url, path}]
     },
-    async getFileUrl(path){ return path; },
+    async getFileUrl(file){ return typeof file === 'string' ? file : (file?.url || "#"); },
     async deleteWeek(b,w){
-      setMem(p=>{
+      setMap(p=>{
         const n=new Map(p);
-        n.set(getKey(b,w), { title:"", status:"NONE", note:"", files:[], submittedAt:null });
+        n.set(`${b}_${w}`, { title:"", status:"NONE", note:"", files:[], submittedAt:null });
         return n;
       });
-    },
-    async getRecordsByBranchWeeks(branchId, weekIds){
-      const map = new Map();
-      for(const wid of weekIds){
-        const r = mem.get(getKey(branchId, wid));
-        if(r) map.set(wid, r);
-      }
-      return map;
-    },
-    async getStatusesByWeek(weekId){
-      const map = new Map();
-      for(const b of BRANCHES){
-        const r = mem.get(getKey(b.id, weekId));
-        map.set(b.id, { status: r?.status || "NONE", submittedAt: r?.submittedAt || null });
-      }
-      return map;
-    },
-    async getStatusesForWeeks(weekIds){
-      const map = new Map();
-      for(const b of BRANCHES){
-        const inner = new Map();
-        for(const wid of weekIds){
-          const r = mem.get(getKey(b.id, wid));
-          inner.set(wid, r?.status || "NONE");
-        }
-        map.set(b.id, inner);
-      }
-      return map;
     }
   };
 }
@@ -363,160 +337,50 @@ function Login({onLogin}){
   );
 }
 
-// ----------------------------- 관리자 대시보드 (탭) -----------------------------
+// ----------------------------- 관리자 대시보드 -----------------------------
 function AdminDashboard({store,onOpenBranch}){
-  const [tab, setTab] = useState("overview");
-
   const [recent,setRecent]=useState({});
-  const [loadingMini,setLoadingMini]=useState(true);
+  const [loading,setLoading]=useState(true);
   useEffect(()=>{(async()=>{
-    const weeks4 = WEEKS.slice(0,4).map(w=>w.id);
-    const byBranch = await store.getStatusesForWeeks(weeks4);
-    const rec = {};
-    for (const b of BRANCHES) {
-      const m = byBranch.get(b.id) || new Map();
-      rec[b.id] = weeks4.map(wid => m.get(wid) || "NONE");
+    const rec={};
+    for(const b of BRANCHES){
+      const arr=[];
+      for(const w of WEEKS.slice(0,4)){
+        const r=await store.getRecord(b.id,w.id);
+        arr.push(r.status || "NONE");
+      }
+      rec[b.id]=arr;
     }
-    setRecent(rec); setLoadingMini(false);
-  })().catch(console.error);},[store]);
+    setRecent(rec); setLoading(false);
+  })();},[store]);
 
-  const [selectedWeekId, setSelectedWeekId] = useState(WEEKS[0].id);
-  const [weekRows, setWeekRows] = useState([]);   // [{ branch, status, submittedAt }]
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [loadingWeek, setLoadingWeek] = useState(false);
-
-  useEffect(()=>{(async()=>{
-    if (tab !== "byWeek") return;
-    setLoadingWeek(true);
-    const map = await store.getStatusesByWeek(selectedWeekId);
-    const list = BRANCHES.map(b => {
-      const v = map.get(b.id) || { status:"NONE", submittedAt:null };
-      return { branch:b, status:v.status, submittedAt:v.submittedAt };
-    });
-    setWeekRows(list);
-    setLoadingWeek(false);
-  })().catch(console.error);},[store, selectedWeekId, tab]);
-
-  const weekIdx = WEEKS.findIndex(w=>w.id===selectedWeekId);
-  const gotoPrevWeek = ()=>{ if(weekIdx+1 < WEEKS.length) setSelectedWeekId(WEEKS[weekIdx+1].id); };
-  const gotoNextWeek = ()=>{ if(weekIdx-1 >= 0) setSelectedWeekId(WEEKS[weekIdx-1].id); };
-  const selectedWeek = WEEKS.find(w=>w.id===selectedWeekId) || WEEKS[0];
-
-  const filteredRows = weekRows.filter(r=> statusFilter==="ALL" ? true : r.status===statusFilter);
-  const total = weekRows.length;
-  const cnt = {
-    NONE: weekRows.filter(r=>r.status==="NONE").length,
-    REPORT: weekRows.filter(r=>r.status==="REPORT").length,
-    OFFICIAL: weekRows.filter(r=>r.status==="OFFICIAL").length,
-  };
-
-  if(loadingMini && tab === "overview") return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
-
-  const TabBtn = ({value, children}) => (
-    <button
-      onClick={()=>setTab(value)}
-      className={`px-4 py-2 rounded-xl text-sm font-semibold border transition
-        ${tab===value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50"}`}
-      aria-selected={tab===value}
-      role="tab"
-    >{children}</button>
-  );
+  if(loading) return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2" role="tablist" aria-label="관리자 대시보드 탭">
-        <TabBtn value="overview">지회 보고 현황</TabBtn>
-        <TabBtn value="byWeek">주차별 제출 현황</TabBtn>
-      </div>
-
-      {tab==="overview" && (
-        <Card title="지회 보고 현황">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {BRANCHES.map(b=>{
-              const r=recent[b.id]?.[0]||"NONE";
-              return (
-                <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
-                    <span className="text-neutral-400 text-xs">자세히 ▶</span>
-                  </div>
-                  <div className="mb-3"><StatusChip statusKey={r}/></div>
-                  <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
-                    <div className="flex items-center gap-1 ml-2">
-                      {(recent[b.id]||[]).map((s,i)=>
-                        <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
-                      )}
-                    </div>
+      <Card title="지회 보고 현황">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {BRANCHES.map(b=>{
+            const r=recent[b.id]?.[0]||"NONE";
+            return (
+              <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
+                  <span className="text-neutral-400 text-xs">자세히 ▶</span>
+                </div>
+                <div className="mb-3"><StatusChip statusKey={r}/></div>
+                <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
+                  <div className="flex items-center gap-1 ml-2">
+                    {(recent[b.id]||[]).map((s,i)=>
+                      <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      {tab==="byWeek" && (
-        <Card
-          title={`주차별 제출 현황 — ${selectedWeek.label}`}
-          actions={
-            <div className="flex items-center gap-2">
-              <Btn onClick={gotoPrevWeek}>◀ PREV</Btn>
-              <Select value={selectedWeekId} onChange={e=>setSelectedWeekId(e.target.value)}>
-                {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
-              </Select>
-              <Btn onClick={gotoNextWeek}>NEXT ▶</Btn>
-            </div>
-          }
-        >
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <div className="text-sm text-neutral-700">
-              전체 {total}개 · <span className="mr-2"><StatusChip statusKey="REPORT" /> {cnt.REPORT}</span>
-              <span className="mr-2"><StatusChip statusKey="OFFICIAL" /> {cnt.OFFICIAL}</span>
-              <span><StatusChip statusKey="NONE" /> {cnt.NONE}</span>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
-                <option value="ALL">전체</option>
-                <option value="REPORT">보고서 제출</option>
-                <option value="OFFICIAL">사유서 제출</option>
-                <option value="NONE">미제출</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-neutral-200 overflow-hidden">
-            <table className="w-full text-base leading-relaxed">
-              <thead className="bg-neutral-50/80">
-                <tr className="text-left text-neutral-700">
-                  <th className="px-5 py-3">지회</th>
-                  <th className="px-5 py-3">상태</th>
-                  <th className="px-5 py-3">제출일시</th>
-                  <th className="px-5 py-3 text-right">작업</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200">
-                {loadingWeek ? (
-                  <tr><td className="px-5 py-6 text-neutral-500" colSpan={4}>불러오는 중…</td></tr>
-                ) : (
-                  filteredRows.map(({branch, status, submittedAt})=>(
-                    <tr key={branch.id} className="odd:bg-neutral-50/40">
-                      <td className="px-5 py-3">{branch.name}</td>
-                      <td className="px-5 py-3"><StatusChip statusKey={status}/></td>
-                      <td className="px-5 py-3">{submittedAt ? new Date(submittedAt).toLocaleString() : "—"}</td>
-                      <td className="px-5 py-3 text-right">
-                        <Btn onClick={()=>onOpenBranch(branch)}>지회로 이동</Btn>
-                      </td>
-                    </tr>
-                  ))
-                )}
-                {!loadingWeek && filteredRows.length===0 && (
-                  <tr><td className="px-5 py-6 text-neutral-500 text-center" colSpan={4}>표시할 항목이 없습니다.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -533,7 +397,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
           <Btn variant="primary" onClick={onEdit}>수정</Btn>
-          <Btn className="text-red-600 border-red-200 hover:bg-red-50" onClick={async()=>{ if(!confirm('정말 삭제하시겠습니까?')) return; await store.deleteWeek(branch.id, week.id); onBack && onBack(); }}>삭제</Btn>
+          {/* 삭제 버튼 */}
         </div>
       </div>
 
@@ -546,18 +410,13 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
           {(rec.files && rec.files.length) ? (
             <div className="flex flex-col gap-2">
               {rec.files.map((f,i)=>{
-                const isString = typeof f === "string";
-                const path = isString ? f : f?.path;
-                const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
-                if (store.storeType==='supabase' && path) {
-                  return (
-                    <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
-                      onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
-                      title={name}
-                    >📎 {name}</button>
-                  );
-                }
-                return <span key={i} className="text-neutral-600 text-sm">📎 {name}</span>;
+                const path = typeof f === 'string' ? f : f?.path;
+                const name = typeof f === 'string' ? fileNameFromPath(f) : (f?.name || fileNameFromPath(path));
+                return (
+                  <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
+                    onClick={async()=>{ const u=await store.getFileUrl({path, name}); if(u) window.open(u,'_blank'); }}
+                  >📎 {name}</button>
+                );
               })}
             </div>
           ) : <div className="text-neutral-500">첨부 없음</div>}
@@ -570,13 +429,14 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 // ----------------------------- 지회 홈 -----------------------------
 function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
   const [rows,setRows]=useState([]);
-
   useEffect(()=>{(async()=>{
-    const weekIds = WEEKS.map(w=>w.id);
-    const recMap = await store.getRecordsByBranchWeeks(branch.id, weekIds);
-    const arr = WEEKS.map(w => ({ week:w, rec: recMap.get(w.id) || { title:"", status:"NONE", note:"", files:[], submittedAt:null } }));
+    const arr=[];
+    for(const w of WEEKS){
+      const r=await store.getRecord(branch.id,w.id);
+      arr.push({week:w,rec:r});
+    }
     setRows(arr);
-  })().catch(console.error);},[store,branch.id,refreshKey]);
+  })();},[store,branch.id,refreshKey]);
 
   return (
     <div className="space-y-6">
@@ -625,7 +485,6 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [files,setFiles]=useState([]);
   const [done,setDone]=useState(false);
   const [errMsg,setErrMsg]=useState("");
-  const [uploadPct,setUploadPct]=useState(0);
 
   useEffect(()=>{(async()=>{
     const rec=await store.getRecord(branch.id,week);
@@ -639,13 +498,9 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
     let uploadedMetas = [];
     try{
       if(files?.length && store.uploadFiles){
-        setUploadPct(0);
-        uploadedMetas = await store.uploadFiles(
-          branch.id, week, files,
-          (done,total)=> setUploadPct(total ? Math.round(done/total*100) : 0)
-        );
-        if (store.storeType === 'supabase' && files.length > 0 && uploadedMetas.length === 0) {
-          setErrMsg('업로드가 시도되었지만 저장된 파일 메타가 비었습니다.');
+        uploadedMetas = await store.uploadFiles(branch.id, week, files); // [{name, path}]
+        if (files.length > 0 && uploadedMetas.length === 0) {
+          alert('업로드가 시도되었지만 저장된 파일 메타가 비었습니다. (버킷/정책/경로 확인)');
         }
       }
     }catch(e){
@@ -653,18 +508,19 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       setErrMsg("파일 업로드는 실패했지만 제목/상태/내용은 저장합니다.");
     }
 
-    const prevPaths = (Array.isArray(prevFiles) ? prevFiles : [])
-      .map(f => (typeof f === "string" ? f : f?.path))
-      .filter(Boolean);
-    const newPaths = (Array.isArray(uploadedMetas) ? uploadedMetas : [])
-      .map(m => m?.path)
-      .filter(Boolean);
-    const filesToSave = Array.from(new Set([...prevPaths, ...newPaths]));
+    // 병합 (path 기준 중복 제거)
+    const prevArr = (prevFiles||[]).map(f=> (typeof f==='string'? {name:fileNameFromPath(f), path:f} : f)).filter(x=>x?.path);
+    const newArr  = (uploadedMetas||[]).map(m=> ({name:m.name, path:m.path}));
+    const mergedMap = new Map();
+    [...prevArr, ...newArr].forEach(x=>{ if(x?.path) mergedMap.set(x.path, {name:x.name, path:x.path}); });
+    const merged = Array.from(mergedMap.values());
 
     try{
       await store.setRecord(branch.id, week, {
-        title, status, note,
-        files: filesToSave,
+        title,
+        status,
+        note,
+        files: merged,
         submittedAt: new Date().toISOString()
       });
     } catch (e) {
@@ -741,15 +597,6 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
                 ))}
               </ul>
             ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
-
-            {uploadPct > 0 && uploadPct < 100 && (
-              <div className="mt-3 text-sm text-neutral-700">
-                업로드 중… {uploadPct}%
-                <div className="w-full h-2 bg-neutral-100 rounded mt-1">
-                  <div className="h-2 rounded bg-emerald-500 transition-all" style={{width:`${uploadPct}%`}} />
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -785,7 +632,7 @@ export default function App(){
       <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-neutral-200">
         <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 py-3 flex justify-between items-center">
           <div className="font-extrabold tracking-tight text-neutral-900 flex items-center gap-3">
-            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.5</span>
+            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.3.1-text</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${store.storeType==='supabase' ? 'border-emerald-500 text-emerald-700' : 'border-neutral-400 text-neutral-600'}`}>
               {store.storeType==='supabase' ? 'Supabase' : 'Demo'}
             </span>
