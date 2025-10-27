@@ -77,13 +77,40 @@ function StatusChip({statusKey}){ const s=STATUS[statusKey]||STATUS.NONE; return
 function Tabs({tabs,active,onChange}){ return (<div className="flex items-center gap-2 border-b pb-2 mb-4">{tabs.map(t=> <button key={t.key} onClick={()=>onChange(t.key)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${active===t.key? 'bg-neutral-900 text-white':'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}>{t.label}</button>)}</div>); }
 
 // 중앙 로딩 모달
-function LoadingModal({text="로딩 중…"}){
+function LoadingModal({open=true, text="로딩 중…", progress=null, items=[]}){
+  if(!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center h-screen w-screen">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
-      <div className="relative z-10 bg-white rounded-2xl shadow-lg px-6 py-5 flex items-center gap-4">
-        <div className="w-8 h-8 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin" />
-        <div className="text-neutral-700 font-medium">{text}</div>
+      <div className="relative z-10 bg-white rounded-2xl shadow-xl w-[720px] max-w-[95vw] p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-lg font-semibold text-neutral-900">{text}</div>
+          <div className="text-sm text-neutral-500">{progress!=null? `${progress}%` : ''}</div>
+        </div>
+
+        {progress!=null && (
+          <div className="w-full bg-neutral-100 rounded-full h-3 mb-4 overflow-hidden">
+            <div className="bg-emerald-500 h-3 transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+
+        <div className="max-h-[40vh] overflow-auto border border-neutral-100 rounded-md p-2 bg-neutral-50">
+          {(items||[]).length>0 ? (
+            <ul className="space-y-2">
+              {(items||[]).map((it,i)=> (
+                <li key={i} className="flex items-center justify-between text-sm text-neutral-700">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center text-neutral-500">📎</div>
+                    <div className="truncate max-w-[48rem]">{it.name}</div>
+                  </div>
+                  <div className="text-xs text-neutral-500">{it.status||''}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-sm text-neutral-500">진행중입니다… 잠시만 기다려 주세요.</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -617,9 +644,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
           </div>
 
           {saving && (
-            <div className="w-full bg-neutral-200 rounded-full h-3 overflow-hidden">
-              <div className="bg-emerald-500 h-3 transition-all" style={{ width: `${progress}%` }}></div>
-            </div>
+            <LoadingModal open={true} text={`업로드 중…`} progress={progress} items={files.map(f=>({ name: f?.name || fileNameFromPath(f?.path), status: '' }))} />
           )}
 
           <div className="flex gap-2 pt-2">
