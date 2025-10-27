@@ -306,17 +306,12 @@ function Login({onLogin}){
 
 // ----------------------------- 관리자 대시보드 -----------------------------
 function AdminDashboard({store,onOpenBranch}){
-  // 기존 카드(최근 4주 미니 보드)
+  // 탭: overview(지회보고현황), byWeek(주차별 현황)
+  const [tab, setTab] = useState("overview");
+
+  // ====== 기존 카드: 지회 보고 현황(최근 4주 스파크) ======
   const [recent,setRecent]=useState({});
   const [loadingMini,setLoadingMini]=useState(true);
-
-  // ✅ 추가: 주차별 전체 지회 현황
-  const [selectedWeekId, setSelectedWeekId] = useState(WEEKS[0].id);
-  const [weekRows, setWeekRows] = useState([]); // [{ branch, status, submittedAt }]
-  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | REPORT | OFFICIAL | NONE
-  const [loadingWeek, setLoadingWeek] = useState(false);
-
-  // 미니 보드: 최근 4주 상태 스파크
   useEffect(()=>{(async()=>{
     const rec={};
     for(const b of BRANCHES){
@@ -330,8 +325,14 @@ function AdminDashboard({store,onOpenBranch}){
     setRecent(rec); setLoadingMini(false);
   })();},[store]);
 
-  // ✅ 주차별 전체 지회 현황 로드
+  // ====== 주차별 전체 지회 현황 ======
+  const [selectedWeekId, setSelectedWeekId] = useState(WEEKS[0].id);
+  const [weekRows, setWeekRows] = useState([]);   // [{ branch, status, submittedAt }]
+  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | REPORT | OFFICIAL | NONE
+  const [loadingWeek, setLoadingWeek] = useState(false);
+
   useEffect(()=>{(async()=>{
+    if (tab !== "byWeek") return;  // byWeek 탭에서만 로드
     setLoadingWeek(true);
     const list=[];
     for(const b of BRANCHES){
@@ -344,14 +345,13 @@ function AdminDashboard({store,onOpenBranch}){
     }
     setWeekRows(list);
     setLoadingWeek(false);
-  })();},[store, selectedWeekId]);
+  })();},[store, selectedWeekId, tab]);
 
   const weekIdx = WEEKS.findIndex(w=>w.id===selectedWeekId);
   const gotoPrevWeek = ()=>{ if(weekIdx+1 < WEEKS.length) setSelectedWeekId(WEEKS[weekIdx+1].id); };
   const gotoNextWeek = ()=>{ if(weekIdx-1 >= 0) setSelectedWeekId(WEEKS[weekIdx-1].id); };
 
   const selectedWeek = WEEKS.find(w=>w.id===selectedWeekId) || WEEKS[0];
-
   const filteredRows = weekRows.filter(r=> statusFilter==="ALL" ? true : r.status===statusFilter);
   const total = weekRows.length;
   const cnt = {
@@ -360,96 +360,121 @@ function AdminDashboard({store,onOpenBranch}){
     OFFICIAL: weekRows.filter(r=>r.status==="OFFICIAL").length,
   };
 
-  if(loadingMini) return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
+  // 로딩 처리
+  if(loadingMini && tab === "overview") return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
+
+  // 탭 버튼 UI
+  const TabBtn = ({value, children}) => (
+    <button
+      onClick={()=>setTab(value)}
+      className={`px-4 py-2 rounded-xl text-sm font-semibold border transition
+        ${tab===value
+          ? "bg-neutral-900 text-white border-neutral-900"
+          : "bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50"}`}
+      aria-selected={tab===value}
+      role="tab"
+    >
+      {children}
+    </button>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* 기존: 지회별 카드 + 최근 4주 스파크 */}
-      <Card title="지회 보고 현황">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {BRANCHES.map(b=>{
-            const r=recent[b.id]?.[0]||"NONE";
-            return (
-              <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
-                  <span className="text-neutral-400 text-xs">자세히 ▶</span>
-                </div>
-                <div className="mb-3"><StatusChip statusKey={r}/></div>
-                <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
-                  <div className="flex items-center gap-1 ml-2">
-                    {(recent[b.id]||[]).map((s,i)=>
-                      <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
-                    )}
+    <div className="space-y-4">
+      {/* Tabs header */}
+      <div className="flex items-center gap-2" role="tablist" aria-label="관리자 대시보드 탭">
+        <TabBtn value="overview">지회 보고 현황</TabBtn>
+        <TabBtn value="byWeek">주차별 제출 현황</TabBtn>
+      </div>
+
+      {/* Tab panels */}
+      {tab==="overview" && (
+        <Card title="지회 보고 현황">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {BRANCHES.map(b=>{
+              const r=recent[b.id]?.[0]||"NONE";
+              return (
+                <div key={b.id} onClick={()=>onOpenBranch(b)} className="rounded-xl border border-neutral-200 p-4 bg-white hover:shadow-md cursor-pointer transition group">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-bold text-lg text-neutral-900 group-hover:text-neutral-700">{b.name}</h3>
+                    <span className="text-neutral-400 text-xs">자세히 ▶</span>
+                  </div>
+                  <div className="mb-3"><StatusChip statusKey={r}/></div>
+                  <div className="flex items-center gap-2 text-[11px] text-neutral-600">최근 4주
+                    <div className="flex items-center gap-1 ml-2">
+                      {(recent[b.id]||[]).map((s,i)=>
+                        <span key={i} className={`inline-block w-3 h-3 rounded ${STATUS[s]?.color?.split(" ")[0]||"bg-neutral-300"}`} />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
-      {/* ✅ 추가: 주차별 전체 지회 현황 */}
-      <Card
-        title={`주차별 제출 현황 — ${selectedWeek.label}`}
-        actions={
-          <div className="flex items-center gap-2">
-            <Btn onClick={gotoPrevWeek}>◀ PREV</Btn>
-            <Select value={selectedWeekId} onChange={e=>setSelectedWeekId(e.target.value)}>
-              {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
-            </Select>
-            <Btn onClick={gotoNextWeek}>NEXT ▶</Btn>
+      {tab==="byWeek" && (
+        <Card
+          title={`주차별 제출 현황 — ${selectedWeek.label}`}
+          actions={
+            <div className="flex items-center gap-2">
+              <Btn onClick={gotoPrevWeek}>◀ 이전주</Btn>
+              <Select value={selectedWeekId} onChange={e=>setSelectedWeekId(e.target.value)}>
+                {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
+              </Select>
+              <Btn onClick={gotoNextWeek}>다음주 ▶</Btn>
+            </div>
+          }
+        >
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="text-sm text-neutral-700">
+              전체 {total}개 · <span className="mr-2"><StatusChip statusKey="REPORT" /> {cnt.REPORT}</span>
+              <span className="mr-2"><StatusChip statusKey="OFFICIAL" /> {cnt.OFFICIAL}</span>
+              <span><StatusChip statusKey="NONE" /> {cnt.NONE}</span>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+                <option value="ALL">전체</option>
+                <option value="REPORT">보고서 제출</option>
+                <option value="OFFICIAL">사유서 제출</option>
+                <option value="NONE">미제출</option>
+              </Select>
+            </div>
           </div>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <div className="text-sm text-neutral-700">
-            전체 {total}개 · <span className="mr-2"><StatusChip statusKey="REPORT" /> {cnt.REPORT}</span>
-            <span className="mr-2"><StatusChip statusKey="OFFICIAL" /> {cnt.OFFICIAL}</span>
-            <span><StatusChip statusKey="NONE" /> {cnt.NONE}</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
-              <option value="ALL">전체</option>
-              <option value="REPORT">보고서 제출</option>
-              <option value="OFFICIAL">사유서 제출</option>
-              <option value="NONE">미제출</option>
-            </Select>
-          </div>
-        </div>
 
-        <div className="rounded-2xl border border-neutral-200 overflow-hidden">
-          <table className="w-full text-base leading-relaxed">
-            <thead className="bg-neutral-50/80">
-              <tr className="text-left text-neutral-700">
-                <th className="px-5 py-3">지회</th>
-                <th className="px-5 py-3">상태</th>
-                <th className="px-5 py-3">제출일시</th>
-                <th className="px-5 py-3 text-right">작업</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-200">
-              {loadingWeek ? (
-                <tr><td className="px-5 py-6 text-neutral-500" colSpan={4}>불러오는 중…</td></tr>
-              ) : (
-                filteredRows.map(({branch, status, submittedAt})=>(
-                  <tr key={branch.id} className="odd:bg-neutral-50/40">
-                    <td className="px-5 py-3">{branch.name}</td>
-                    <td className="px-5 py-3"><StatusChip statusKey={status}/></td>
-                    <td className="px-5 py-3">{submittedAt ? new Date(submittedAt).toLocaleString() : "—"}</td>
-                    <td className="px-5 py-3 text-right">
-                      <Btn onClick={()=>onOpenBranch(branch)}>지회로 이동</Btn>
-                    </td>
-                  </tr>
-                ))
-              )}
-              {!loadingWeek && filteredRows.length===0 && (
-                <tr><td className="px-5 py-6 text-neutral-500 text-center" colSpan={4}>표시할 항목이 없습니다.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+          <div className="rounded-2xl border border-neutral-200 overflow-hidden">
+            <table className="w-full text-base leading-relaxed">
+              <thead className="bg-neutral-50/80">
+                <tr className="text-left text-neutral-700">
+                  <th className="px-5 py-3">지회</th>
+                  <th className="px-5 py-3">상태</th>
+                  <th className="px-5 py-3">제출일시</th>
+                  <th className="px-5 py-3 text-right">작업</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200">
+                {loadingWeek ? (
+                  <tr><td className="px-5 py-6 text-neutral-500" colSpan={4}>불러오는 중…</td></tr>
+                ) : (
+                  filteredRows.map(({branch, status, submittedAt})=>(
+                    <tr key={branch.id} className="odd:bg-neutral-50/40">
+                      <td className="px-5 py-3">{branch.name}</td>
+                      <td className="px-5 py-3"><StatusChip statusKey={status}/></td>
+                      <td className="px-5 py-3">{submittedAt ? new Date(submittedAt).toLocaleString() : "—"}</td>
+                      <td className="px-5 py-3 text-right">
+                        <Btn onClick={()=>onOpenBranch(branch)}>지회로 이동</Btn>
+                      </td>
+                    </tr>
+                  ))
+                )}
+                {!loadingWeek && filteredRows.length===0 && (
+                  <tr><td className="px-5 py-6 text-neutral-500 text-center" colSpan={4}>표시할 항목이 없습니다.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
