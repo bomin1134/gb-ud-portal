@@ -1,7 +1,6 @@
 // src/App.jsx
 import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { v4 as uuidv4 } from "uuid";
 
 /*
   GB-UD 지회 보고포털 — v0.3.1 (files: text 저장 + 한글 파일명 표시)
@@ -132,8 +131,9 @@ function makeSafeKey(branchId, weekId, ext){
   const id = `gb${String(branchId).padStart(3,'0')}`;
   const cleanExt = (ext || '').replace(/[^A-Za-z0-9.]/g, '').slice(0,10).toLowerCase();
   const suffix = cleanExt && !cleanExt.startsWith('.') ? `.${cleanExt}` : cleanExt;
-  return `${id}/${weekId}/${uuidv4()}${suffix}`;
-}
+  const rand = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2));
+  return `${id}/${weekId}/${rand}${suffix}`;
+  }
 
 // ----------------------------- 공용 컴포넌트 -----------------------------
 function Btn({children,onClick,variant="neutral",className="",type="button"}){
