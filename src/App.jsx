@@ -197,24 +197,35 @@ const dot = origName.lastIndexOf(".");
 const base = dot > -1 ? origName.slice(0, dot) : origName;
 const ext  = dot > -1 ? origName.slice(dot) : "";
 
-// 한글(가-힣), 영문/숫자, 점, 하이픈, 밑줄, 괄호, 공백 허용
-// 나머지는 _ 로 치환. 연속 _ 압축, 앞뒤 _/공백 제거, 길이 제한
+// 1) 허용 문자: 한글/영문/숫자/공백/()-._
+//    나머지는 '_' 로 치환
 let safeBase = base
-  .replace(/[^\p{L}\p{N}.\-_\s()가-힣]/gu, "_")  // ← 핵심: 한글/문자/숫자 허용
+  .replace(/[^\p{L}\p{N}\s()._\-가-힣]/gu, "_")
   .replace(/\s+/g, " ")
   .trim()
   .replace(/\s+/g, "_")
   .replace(/_+/g, "_")
   .slice(0, 100);
 
-// 확장자는 영문/숫자/점만, 소문자, 길이 제한
+// 2) 확장자는 영숫자/점만, 소문자, 길이 제한
 const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0, 10).toLowerCase();
 
-// 혹시 전부 제거되어 비면 기본값
-if (!safeBase) safeBase = "file";
+// 3) 세그먼트 첫 글자 안전화: 첫 글자가 영문/숫자/한글이 아니라면 접두어 부여
+if (!safeBase || !/^[\p{L}\p{N}가-힣]/u.test(safeBase)) {
+  safeBase = `file_${safeBase || ""}`;
+  // 앞쪽에 붙은 비문자/구두점 제거
+  safeBase = safeBase.replace(/^[^A-Za-z0-9가-힣]+/u, "");
+  if (!safeBase) safeBase = "file";
+}
 
+// 4) 혹시 남은 점(.)으로 시작하는 경우 방지 (숨김파일 형태)
+safeBase = safeBase.replace(/^\.+/, "file");
+
+// 최종 파일명
 const safeName = `${safeBase}${safeExt || ""}`;
-          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
+
+// 업로드 경로
+const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
           const { error } = await client.storage.from(bucket).upload(
             path,
             f,
