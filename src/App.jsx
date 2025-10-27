@@ -551,7 +551,13 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
               {rows.map(({week,rec})=> (
                 <tr key={week.id} className="odd:bg-neutral-50/40">
                   <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
-                  <td className="px-5 py-4"><button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title||"(제목 없음)"}</button></td>
+                  <td className="px-5 py-4">
+                    {rec.status === 'NONE' ? (
+                      <span className="text-neutral-500">미제출</span>
+                    ) : (
+                      <button className="text-neutral-800 hover:underline" onClick={()=>onOpenDetail(week.id)}>{rec.title||"(제목 없음)"}</button>
+                    )}
+                  </td>
                   <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
                   <td className="px-5 py-4 text-right"><StatusChip statusKey={rec.status}/></td>
                 </tr>
