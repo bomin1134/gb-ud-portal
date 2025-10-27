@@ -394,11 +394,11 @@ function AdminDashboard({store,onOpenBranch}){
         title={`주차별 제출 현황 — ${selectedWeek.label}`}
         actions={
           <div className="flex items-center gap-2">
-            <Btn onClick={gotoPrevWeek}>◀ 이전주</Btn>
+            <Btn onClick={gotoPrevWeek}>◀ PREV</Btn>
             <Select value={selectedWeekId} onChange={e=>setSelectedWeekId(e.target.value)}>
               {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
             </Select>
-            <Btn onClick={gotoNextWeek}>다음주 ▶</Btn>
+            <Btn onClick={gotoNextWeek}>NEXT ▶</Btn>
           </div>
         }
       >
