@@ -188,37 +188,50 @@ function useStore(){
           throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
         }
       },
-      async uploadFiles(branchId,weekId,files){
-        const metas=[];
-        for(const f of (files||[])){
-          // 안전한 업로드 키: ASCII만, 공백→_, 특수문자 제거, 길이 제한
-          const origName = (f.name || "file").normalize("NFC");
-          const dot = origName.lastIndexOf(".");
-          const base = dot > -1 ? origName.slice(0, dot) : origName;
-          const ext  = dot > -1 ? origName.slice(dot) : "";
-          let safeBase = base
-            .replace(/\s+/g, "_")
-            .replace(/[^A-Za-z0-9._-]/g, "_")
-            .replace(/_+/g, "_")
-            .replace(/^_+|_+$/g, "")
-            .slice(-100);
-          const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0,10).toLowerCase();
-          const safeName = (safeBase || "file") + (safeExt || "");
-          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
-          const { error } = await client.storage.from(bucket).upload(
-            path,
-            f,
-            { upsert:true, contentType: f.type || undefined }
-          );
-          if(!error){
-            metas.push({ name:safeName, path });
-          } else {
-            console.error("storage.upload error", error);
-            alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
-          }
-        }
-        return metas; // [{name, path}]
-      },
+      async uploadFiles(branchId, weekId, files) {
+const metas = [];
+for (const f of (files || [])) {
+// 1️⃣ 원본 파일명 보존 (유니코드 NFC 정규화)
+const origName = (f.name || "파일").normalize("NFC");
+
+
+// 2️⃣ 슬래시/역슬래시/제어문자 제거 (경로 탈출 방지)
+const cleanedName = origName
+.replace(/[\\/]/g, " ") // 경로 구분자 제거
+.replace(/[\u0000-\u001F\u007F]/g, "") // 제어문자 제거
+.trim();
+
+
+// 3️⃣ 너무 긴 파일명 방지 (예: 180자 제한)
+const dot = cleanedName.lastIndexOf(".");
+const base = dot > -1 ? cleanedName.slice(0, dot) : cleanedName;
+const ext = dot > -1 ? cleanedName.slice(dot) : "";
+const safeBase = base.slice(0, 170);
+const safeExt = ext.slice(0, 10);
+const finalName = (safeBase || "파일") + safeExt; // 한글 그대로 유지
+
+
+// 4️⃣ 업로드 경로 (브랜치/주차/파일명)
+const path = `gb${String(branchId).padStart(3, "0")}/${weekId}/${finalName}`;
+
+
+// 5️⃣ Supabase 업로드 (upsert 허용)
+const { error } = await client.storage.from(bucket).upload(
+path,
+f,
+{ upsert: true, contentType: f.type || undefined }
+);
+
+
+if (!error) {
+metas.push({ name: finalName, path });
+} else {
+console.error("storage.upload error", error);
+alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
+}
+}
+return metas; // [{ name, path }]
+},
       async getFileUrl(path){
         const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
         return data?.signedUrl || null;
