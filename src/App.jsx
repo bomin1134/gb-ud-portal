@@ -3,9 +3,10 @@ import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 /*
-  GB-UD 지회 보고포털 — v0.4.0 (속도 패치: 배치 쿼리)
-  - N+1 제거: 지회 화면/관리자 대시보드 모두 1~2회 쿼리로 축소
-  - UI/기능은 기존과 동일
+  GB-UD 지회 보고포털 — v0.5.0
+  - 속도 패치: 배치 쿼리(관리자/지회 화면 모두 1~2회 쿼리)
+  - 업로드 최적화: 병렬(동시성 3) + 중복스킵 + 진행률 표시
+  - UI/흐름은 기존과 동일
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
@@ -28,7 +29,7 @@ const USERS = [
 const STATUS = {
   NONE:     { key:"NONE",     label:"미제출",     color:"bg-neutral-300 text-neutral-900" },
   REPORT:   { key:"REPORT",   label:"보고서 제출", color:"bg-emerald-600/90 text-white" },
-  OFFICIAL: { key:"OFFICIAL", label:"사유서 제출",   color:"bg-orange-500/90 text-white" }
+  OFFICIAL: { key:"OFFICIAL", label:"사유서 제출",  color:"bg-orange-500/90 text-white" }
 };
 
 // ----------------------------- Week 유틸 -----------------------------
@@ -120,7 +121,6 @@ function useStore(){
   const bucket= import.meta.env.VITE_SUPABASE_BUCKET || "reports";
   const table = import.meta.env.VITE_SUPABASE_TABLE  || "submissions";
 
-  // 공통: 레코드 표준화
   const normalizeRecord = (r)=>({
     title: r?.title || "",
     status: r?.status || "NONE",
@@ -136,7 +136,6 @@ function useStore(){
     return {
       storeType:"supabase",
 
-      // 단건
       async getRecord(branchId,weekId){
         const { data, error } = await client
           .from(table).select("title,status,note,files,submitted_at")
@@ -165,48 +164,72 @@ function useStore(){
         if (error) { console.error("DB upsert error", error, payload); throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error))); }
       },
 
-      // 업로드(간단 버전: ASCII 안전 이름)
-      async uploadFiles(branchId,weekId,files){
-        const metas=[];
-        for(const f of (files||[])){
-          const origName = (f.name || "file").normalize("NFC");
-          const dot = origName.lastIndexOf(".");
-          const base = dot > -1 ? origName.slice(0, dot) : origName;
-          const ext  = dot > -1 ? origName.slice(dot) : "";
-          let safeBase = base
+      // ========= 업로드: 병렬 3개 + 중복 스킵 + 진행률 콜백 =========
+      async uploadFiles(branchId,weekId,files,onProgress){
+        const list = Array.from(files || []);
+        if (!list.length) return [];
+
+        // (1) 중복 스킵(name+size)
+        const uniq=[]; const seen=new Set();
+        for(const f of list){ const k=`${f.name}|${f.size}`; if(seen.has(k)) continue; seen.add(k); uniq.push(f); }
+
+        // (2) 안전 파일명 (ASCII 근사)
+        const toKey = (name) => {
+          const dot = name.lastIndexOf(".");
+          const base = (dot>-1?name.slice(0,dot):name)
             .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-            .replace(/[^A-Za-z0-9._\- ]/g,"_")
-            .replace(/\s+/g,"_")
-            .replace(/_+/g,"_")
-            .replace(/^[^A-Za-z0-9]+/, "")
-            .replace(/^[_\.]+/,"")
-            .slice(0,100);
-          if(!safeBase) safeBase="file";
-          const safeExt = ext.replace(/[^A-Za-z0-9.]/g,"").slice(0,10).toLowerCase();
-          const safeName = `${safeBase}${safeExt||""}`;
+            .replace(/[^A-Za-z0-9._\- ]/g,"_").replace(/\s+/g,"_")
+            .replace(/_+/g,"_").replace(/^[^A-Za-z0-9]+/,"").replace(/^[_\.]+/,"")
+            .slice(0,100) || "file";
+          const ext = (dot>-1?name.slice(dot):"").replace(/[^A-Za-z0-9.]/g,"").slice(0,10).toLowerCase();
+          return `${base}${ext||""}`;
+        };
+
+        const metas=[]; const CONCURRENCY=3;
+        let idx=0, doneBytes=0;
+        const totalBytes = uniq.reduce((s,f)=>s+(f.size||0),0);
+
+        const uploadOne = async (f) => {
+          const safeName = toKey(f.name || "file");
           const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
-          const { error } = await client.storage.from(bucket).upload(path, f, { upsert:true, contentType: f.type || undefined });
-          if(!error){ metas.push({ name:safeName, path }); }
-          else { console.error("storage.upload error", error); }
-        }
+          const { error } = await client.storage.from(bucket).upload(path, f, {
+            upsert:true, contentType: f.type || undefined
+          });
+          if(!error){
+            metas.push({ name:safeName, path });
+            doneBytes += (f.size || 0);
+            onProgress && onProgress(doneBytes, totalBytes);
+          }else{
+            console.error("storage.upload error", error);
+          }
+        };
+
+        const workers = Array.from({length: Math.min(CONCURRENCY, uniq.length)}).map(async ()=>{
+          while(idx<uniq.length){
+            const cur = uniq[idx++]; // 라운드로빈
+            await uploadOne(cur);
+          }
+        });
+        await Promise.allSettled(workers);
         return metas;
       },
+
       async getFileUrl(path){
         const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
         return data?.signedUrl || null;
       },
+
       async deleteWeek(branchId,weekId){
         const prefix=`gb${String(branchId).padStart(3,"0")}/${weekId}`;
         const { data:list } = await client.storage.from(bucket).list(prefix);
         if(list?.length){ await client.storage.from(bucket).remove(list.map(f=>`${prefix}/${f.name}`)); }
         await client.from(table).upsert({
           id:`${branchId}_${weekId}`, branch_id: branchId, week_id: weekId,
-          title: "", status:"NONE", note:"", files: [], submitted_at: null
+          title:"", status:"NONE", note:"", files:[], submitted_at:null
         });
       },
 
-      // ===================== 배치 API (속도 핵심) =====================
-      // ❶ 특정 지회 + 여러 주 한번에
+      // ===================== 배치 API =====================
       async getRecordsByBranchWeeks(branchId, weekIds){
         const { data, error } = await client
           .from(table)
@@ -219,7 +242,6 @@ function useStore(){
         return map;
       },
 
-      // ❷ 특정 주 + 모든 지회 한번에
       async getStatusesByWeek(weekId){
         const { data, error } = await client
           .from(table)
@@ -231,14 +253,13 @@ function useStore(){
         return map;
       },
 
-      // ❸ 여러 주(예: 최근 4주) + 모든 지회 한번에
       async getStatusesForWeeks(weekIds){
         const { data, error } = await client
           .from(table)
           .select("branch_id, week_id, status")
           .in("week_id", weekIds);
         if (error) { console.error(error); return new Map(); }
-        const map = new Map(); // branch_id -> (week_id -> status)
+        const map = new Map();
         for (const r of (data||[])) {
           if (!map.has(r.branch_id)) map.set(r.branch_id, new Map());
           map.get(r.branch_id).set(r.week_id, r.status || "NONE");
@@ -262,7 +283,7 @@ function useStore(){
         return n;
       });
     },
-    async uploadFiles(b,w,files){
+    async uploadFiles(b,w,files,onProgress){
       if(!files?.length) return [];
       const metas=[];
       setMem(p=>{
@@ -277,6 +298,9 @@ function useStore(){
         n.set(key, { ...prev, files:[...prevList, ...dedupAdded] });
         return n;
       });
+      // 진행률 흉내(메모리모드)
+      let done=0, total=(files||[]).reduce((s,f)=>s+(f.size||0),0);
+      onProgress && onProgress(total, total);
       return metas;
     },
     async getFileUrl(path){ return path; },
@@ -287,13 +311,11 @@ function useStore(){
         return n;
       });
     },
-
-    // ===== 메모리용 배치 구현 =====
     async getRecordsByBranchWeeks(branchId, weekIds){
       const map = new Map();
       for(const wid of weekIds){
         const r = mem.get(getKey(branchId, wid));
-        if(r) map.set(wid, r); // 이미 표준형
+        if(r) map.set(wid, r);
       }
       return map;
     },
@@ -345,12 +367,11 @@ function Login({onLogin}){
 function AdminDashboard({store,onOpenBranch}){
   const [tab, setTab] = useState("overview");
 
-  // 최근 4주 스파크: 배치 조회
   const [recent,setRecent]=useState({});
   const [loadingMini,setLoadingMini]=useState(true);
   useEffect(()=>{(async()=>{
     const weeks4 = WEEKS.slice(0,4).map(w=>w.id);
-    const byBranch = await store.getStatusesForWeeks(weeks4); // Map<branchId, Map<weekId,status>>
+    const byBranch = await store.getStatusesForWeeks(weeks4);
     const rec = {};
     for (const b of BRANCHES) {
       const m = byBranch.get(b.id) || new Map();
@@ -359,7 +380,6 @@ function AdminDashboard({store,onOpenBranch}){
     setRecent(rec); setLoadingMini(false);
   })().catch(console.error);},[store]);
 
-  // 주차별 현황 탭
   const [selectedWeekId, setSelectedWeekId] = useState(WEEKS[0].id);
   const [weekRows, setWeekRows] = useState([]);   // [{ branch, status, submittedAt }]
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -368,7 +388,7 @@ function AdminDashboard({store,onOpenBranch}){
   useEffect(()=>{(async()=>{
     if (tab !== "byWeek") return;
     setLoadingWeek(true);
-    const map = await store.getStatusesByWeek(selectedWeekId); // Map<branchId, {status,submittedAt}>
+    const map = await store.getStatusesByWeek(selectedWeekId);
     const list = BRANCHES.map(b => {
       const v = map.get(b.id) || { status:"NONE", submittedAt:null };
       return { branch:b, status:v.status, submittedAt:v.submittedAt };
@@ -440,11 +460,11 @@ function AdminDashboard({store,onOpenBranch}){
           title={`주차별 제출 현황 — ${selectedWeek.label}`}
           actions={
             <div className="flex items-center gap-2">
-              <Btn onClick={gotoPrevWeek}>◀ 이전주</Btn>
+              <Btn onClick={gotoPrevWeek}>◀ PREV</Btn>
               <Select value={selectedWeekId} onChange={e=>setSelectedWeekId(e.target.value)}>
                 {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
               </Select>
-              <Btn onClick={gotoNextWeek}>다음주 ▶</Btn>
+              <Btn onClick={gotoNextWeek}>NEXT ▶</Btn>
             </div>
           }
         >
@@ -551,19 +571,12 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
   const [rows,setRows]=useState([]);
 
-  // ✅ 배치 조회 적용: 12회 → 1회
   useEffect(()=>{(async()=>{
     const weekIds = WEEKS.map(w=>w.id);
-    const recMap = await store.getRecordsByBranchWeeks(branch.id, weekIds); // Map<weekId, rec>
+    const recMap = await store.getRecordsByBranchWeeks(branch.id, weekIds);
     const arr = WEEKS.map(w => ({ week:w, rec: recMap.get(w.id) || { title:"", status:"NONE", note:"", files:[], submittedAt:null } }));
     setRows(arr);
   })().catch(console.error);},[store,branch.id,refreshKey]);
-
-  const handleDelete=async(weekId)=>{
-    if(!confirm("정말 삭제하시겠습니까?")) return;
-    await store.deleteWeek(branch.id,weekId);
-    setRows(prev=>prev.map(r=>r.week.id===weekId?{...r,rec:{title:"", status:"NONE",note:"",files:[],submittedAt:null}}:r));
-  };
 
   return (
     <div className="space-y-6">
@@ -612,6 +625,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [files,setFiles]=useState([]);
   const [done,setDone]=useState(false);
   const [errMsg,setErrMsg]=useState("");
+  const [uploadPct,setUploadPct]=useState(0);
 
   useEffect(()=>{(async()=>{
     const rec=await store.getRecord(branch.id,week);
@@ -625,7 +639,11 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
     let uploadedMetas = [];
     try{
       if(files?.length && store.uploadFiles){
-        uploadedMetas = await store.uploadFiles(branch.id, week, files);
+        setUploadPct(0);
+        uploadedMetas = await store.uploadFiles(
+          branch.id, week, files,
+          (done,total)=> setUploadPct(total ? Math.round(done/total*100) : 0)
+        );
         if (store.storeType === 'supabase' && files.length > 0 && uploadedMetas.length === 0) {
           setErrMsg('업로드가 시도되었지만 저장된 파일 메타가 비었습니다.');
         }
@@ -723,6 +741,15 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
                 ))}
               </ul>
             ) : <div className="text-neutral-500 text-xs">첨부 파일 없음</div>}
+
+            {uploadPct > 0 && uploadPct < 100 && (
+              <div className="mt-3 text-sm text-neutral-700">
+                업로드 중… {uploadPct}%
+                <div className="w-full h-2 bg-neutral-100 rounded mt-1">
+                  <div className="h-2 rounded bg-emerald-500 transition-all" style={{width:`${uploadPct}%`}} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -758,7 +785,7 @@ export default function App(){
       <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-neutral-200">
         <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 py-3 flex justify-between items-center">
           <div className="font-extrabold tracking-tight text-neutral-900 flex items-center gap-3">
-            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.4</span>
+            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.5</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${store.storeType==='supabase' ? 'border-emerald-500 text-emerald-700' : 'border-neutral-400 text-neutral-600'}`}>
               {store.storeType==='supabase' ? 'Supabase' : 'Demo'}
             </span>
