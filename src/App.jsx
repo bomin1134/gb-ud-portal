@@ -306,8 +306,17 @@ function Login({onLogin}){
 
 // ----------------------------- 관리자 대시보드 -----------------------------
 function AdminDashboard({store,onOpenBranch}){
+  // 기존 카드(최근 4주 미니 보드)
   const [recent,setRecent]=useState({});
-  const [loading,setLoading]=useState(true);
+  const [loadingMini,setLoadingMini]=useState(true);
+
+  // ✅ 추가: 주차별 전체 지회 현황
+  const [selectedWeekId, setSelectedWeekId] = useState(WEEKS[0].id);
+  const [weekRows, setWeekRows] = useState([]); // [{ branch, status, submittedAt }]
+  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | REPORT | OFFICIAL | NONE
+  const [loadingWeek, setLoadingWeek] = useState(false);
+
+  // 미니 보드: 최근 4주 상태 스파크
   useEffect(()=>{(async()=>{
     const rec={};
     for(const b of BRANCHES){
@@ -318,13 +327,44 @@ function AdminDashboard({store,onOpenBranch}){
       }
       rec[b.id]=arr;
     }
-    setRecent(rec); setLoading(false);
+    setRecent(rec); setLoadingMini(false);
   })();},[store]);
 
-  if(loading) return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
+  // ✅ 주차별 전체 지회 현황 로드
+  useEffect(()=>{(async()=>{
+    setLoadingWeek(true);
+    const list=[];
+    for(const b of BRANCHES){
+      const r=await store.getRecord(b.id, selectedWeekId);
+      list.push({
+        branch: b,
+        status: r?.status || "NONE",
+        submittedAt: r?.submittedAt || null,
+      });
+    }
+    setWeekRows(list);
+    setLoadingWeek(false);
+  })();},[store, selectedWeekId]);
+
+  const weekIdx = WEEKS.findIndex(w=>w.id===selectedWeekId);
+  const gotoPrevWeek = ()=>{ if(weekIdx+1 < WEEKS.length) setSelectedWeekId(WEEKS[weekIdx+1].id); };
+  const gotoNextWeek = ()=>{ if(weekIdx-1 >= 0) setSelectedWeekId(WEEKS[weekIdx-1].id); };
+
+  const selectedWeek = WEEKS.find(w=>w.id===selectedWeekId) || WEEKS[0];
+
+  const filteredRows = weekRows.filter(r=> statusFilter==="ALL" ? true : r.status===statusFilter);
+  const total = weekRows.length;
+  const cnt = {
+    NONE: weekRows.filter(r=>r.status==="NONE").length,
+    REPORT: weekRows.filter(r=>r.status==="REPORT").length,
+    OFFICIAL: weekRows.filter(r=>r.status==="OFFICIAL").length,
+  };
+
+  if(loadingMini) return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* 기존: 지회별 카드 + 최근 4주 스파크 */}
       <Card title="지회 보고 현황">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {BRANCHES.map(b=>{
@@ -346,6 +386,68 @@ function AdminDashboard({store,onOpenBranch}){
               </div>
             );
           })}
+        </div>
+      </Card>
+
+      {/* ✅ 추가: 주차별 전체 지회 현황 */}
+      <Card
+        title={`주차별 제출 현황 — ${selectedWeek.label}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <Btn onClick={gotoPrevWeek}>◀ 이전주</Btn>
+            <Select value={selectedWeekId} onChange={e=>setSelectedWeekId(e.target.value)}>
+              {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
+            </Select>
+            <Btn onClick={gotoNextWeek}>다음주 ▶</Btn>
+          </div>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="text-sm text-neutral-700">
+            전체 {total}개 · <span className="mr-2"><StatusChip statusKey="REPORT" /> {cnt.REPORT}</span>
+            <span className="mr-2"><StatusChip statusKey="OFFICIAL" /> {cnt.OFFICIAL}</span>
+            <span><StatusChip statusKey="NONE" /> {cnt.NONE}</span>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+              <option value="ALL">전체</option>
+              <option value="REPORT">보고서 제출</option>
+              <option value="OFFICIAL">사유서 제출</option>
+              <option value="NONE">미제출</option>
+            </Select>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-200 overflow-hidden">
+          <table className="w-full text-base leading-relaxed">
+            <thead className="bg-neutral-50/80">
+              <tr className="text-left text-neutral-700">
+                <th className="px-5 py-3">지회</th>
+                <th className="px-5 py-3">상태</th>
+                <th className="px-5 py-3">제출일시</th>
+                <th className="px-5 py-3 text-right">작업</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-200">
+              {loadingWeek ? (
+                <tr><td className="px-5 py-6 text-neutral-500" colSpan={4}>불러오는 중…</td></tr>
+              ) : (
+                filteredRows.map(({branch, status, submittedAt})=>(
+                  <tr key={branch.id} className="odd:bg-neutral-50/40">
+                    <td className="px-5 py-3">{branch.name}</td>
+                    <td className="px-5 py-3"><StatusChip statusKey={status}/></td>
+                    <td className="px-5 py-3">{submittedAt ? new Date(submittedAt).toLocaleString() : "—"}</td>
+                    <td className="px-5 py-3 text-right">
+                      <Btn onClick={()=>onOpenBranch(branch)}>지회로 이동</Btn>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {!loadingWeek && filteredRows.length===0 && (
+                <tr><td className="px-5 py-6 text-neutral-500 text-center" colSpan={4}>표시할 항목이 없습니다.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>
