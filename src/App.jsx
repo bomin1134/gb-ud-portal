@@ -1,12 +1,10 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 /*
-  GB-UD 지회 보고포털 — v0.5.0
-  - 업로드 진행 모달/파일별 상태/전체 % 표시
-  - crypto.randomUUID()로 안전한 스토리지 키 생성 (uuid 패키지 불필요)
-  - Supabase가 없으면 메모리(DEMO) 모드
+  GB-UD 지회 보고포털 — v0.5 (업로드 진행 모달 + 부드러운 퍼센트)
+  - .env.local 설정 시 Supabase, 미설정 시 메모리(DEMO)
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
@@ -35,7 +33,7 @@ const STATUS = {
 // ----------------------------- Week 유틸 -----------------------------
 function startOfWeekMonday(d){
   const x=new Date(d);
-  const n=x.getDay(); // 0=일,1=월
+  const n=x.getDay();
   const diff=(n===0?-6:1-n);
   x.setDate(x.getDate()+diff);
   x.setHours(0,0,0,0);
@@ -53,7 +51,7 @@ function weekLabelKorean(monday){
   const y=monday.getFullYear();
   const mIdx=monday.getMonth();
   const firstDay = new Date(y, mIdx, 1);
-  const toMon   = (8 - firstDay.getDay()) % 7; // 첫 월요일까지 이동 일수
+  const toMon   = (8 - firstDay.getDay()) % 7;
   const firstMon= new Date(y, mIdx, 1 + toMon);
   const diffDays = Math.floor((monday - firstMon) / (1000*60*60*24));
   const ordinal = diffDays < 0 ? 1 : Math.floor(diffDays/7) + 1;
@@ -77,13 +75,10 @@ function fileNameFromPath(p){
   const parts = String(p).split("/");
   return parts[parts.length-1] || String(p);
 }
-function makeSafeKey(branchId, weekId, ext){
-  const id = `gb${String(branchId).padStart(3,'0')}`;
-  const cleanExt = (ext || '').replace(/[^A-Za-z0-9.]/g, '').slice(0,10).toLowerCase();
-  const suffix = cleanExt && !cleanExt.startsWith('.') ? `.${cleanExt}` : cleanExt;
-  const rand = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2));
-  return `${id}/${weekId}/${rand}${suffix}`;
-}
+const uuid = () =>
+  (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 // ----------------------------- 공용 컴포넌트 -----------------------------
 function Btn({children,onClick,variant="neutral",className="",type="button"}){
@@ -95,7 +90,6 @@ function Btn({children,onClick,variant="neutral",className="",type="button"}){
       : "bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50";
   return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
 }
-
 function Field({label,children,help}){
   return (
     <div className="space-y-2">
@@ -105,7 +99,6 @@ function Field({label,children,help}){
     </div>
   );
 }
-
 function Input(props){
   return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
 }
@@ -115,7 +108,6 @@ function Textarea(props){
 function Select(props){
   return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
 }
-
 function Card({title,actions,children}){
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
@@ -127,34 +119,9 @@ function Card({title,actions,children}){
     </div>
   );
 }
-
 function StatusChip({statusKey}) {
   const s=STATUS[statusKey]||STATUS.NONE;
   return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>;
-}
-
-function Modal({open, title, children, footer}) {
-  if(!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-[640px] max-w-full rounded-2xl bg-white shadow-xl">
-        <div className="px-5 py-4 border-b flex items-center justify-between">
-          <h3 className="font-bold text-lg">{title}</h3>
-        </div>
-        <div className="p-5 max-h-[60vh] overflow-auto">{children}</div>
-        {footer && <div className="px-5 py-3 border-t bg-neutral-50">{footer}</div>}
-      </div>
-    </div>
-  );
-}
-
-function ProgressBar({value}) {
-  const v = Math.max(0, Math.min(100, Math.round(value || 0)));
-  return (
-    <div className="w-full h-2 bg-neutral-200 rounded-full overflow-hidden">
-      <div className="h-full bg-emerald-600" style={{width: `${v}%`}} />
-    </div>
-  );
 }
 
 // ----------------------------- Store (Supabase or Memory) -----------------------------
@@ -179,13 +146,11 @@ function useStore(){
           ? data.files
           : (typeof data.files === 'string' && data.files.length ? [data.files] : []);
         const normalizedFiles = filesArr.map(f => {
-          if (typeof f === "string") {
-            const name = fileNameFromPath(f);
-            return { name, path: f };
-          }
+          if (typeof f === "string") return { name: fileNameFromPath(f), path: f };
           return {
             name: f?.name ?? (f?.path ? fileNameFromPath(f.path) : "파일"),
             path: f?.path ?? null,
+            url:  f?.url ?? null,
           };
         });
 
@@ -212,33 +177,20 @@ function useStore(){
           submitted_at: rec.submittedAt
         };
         const { error } = await client.from(table).upsert(payload);
-        if (error) {
-          console.error("DB upsert error", error, payload);
-          throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
-        }
+        if (error) throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
       },
-      async uploadFiles(branchId,weekId,files,onProgress){
+      async uploadFiles(branchId,weekId,files){
         const metas=[];
-        for (let i=0;i<(files||[]).length;i++){
-          const f = files[i];
-          onProgress && onProgress({ type:'start', index:i, file:f });
-
-          const origName = (f.name || "file").normalize("NFC");
-          const dot = origName.lastIndexOf(".");
-          const ext  = dot > -1 ? origName.slice(dot+1) : "";
-          const path = makeSafeKey(branchId, weekId, ext);
-
-          const { error } = await client.storage.from(bucket).upload(
-            path, f, { upsert:true, contentType: f.type || undefined }
-          );
-          if(!error){
-            metas.push({ name: origName, path });
-            onProgress && onProgress({ type:'done', index:i, file:f, ok:true, bytes:(f.size||0) });
-          } else {
-            console.error("storage.upload error", error);
-            alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
-            onProgress && onProgress({ type:'done', index:i, file:f, ok:false, bytes:0 });
-          }
+        for(const f of (files||[])){
+          // 원래 확장자 유지 + 안전한 파일명
+          const orig = (f.name || "file");
+          const dot  = orig.lastIndexOf(".");
+          const ext  = dot > -1 ? orig.slice(dot).replace(/[^A-Za-z0-9.]/g,"").toLowerCase() : "";
+          const safe = uuid() + (ext || "");
+          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safe}`;
+          const { error } = await client.storage.from(bucket).upload(path, f, { upsert:true, contentType:f.type || undefined });
+          if(!error){ metas.push({ name: orig, path }); }
+          else { console.error("storage.upload error", error); alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error))); }
         }
         return metas; // [{name, path}]
       },
@@ -277,22 +229,17 @@ function useStore(){
         return n;
       });
     },
-    async uploadFiles(b,w,files,onProgress){
+    async uploadFiles(b,w,files){
       if(!files?.length) return [];
       const metas=[];
-      for(let i=0;i<files.length;i++){
-        const f=files[i];
-        onProgress && onProgress({ type:'start', index:i, file:f });
-        const url=URL.createObjectURL(f);
-        metas.push({ name:f.name, path:url });
-        onProgress && onProgress({ type:'done', index:i, file:f, ok:true, bytes:(f.size||0) });
-      }
       setMap(p=>{
         const n=new Map(p);
         const key=`${b}_${w}`;
         const prev=n.get(key)||{title:"", status:"NONE", note:"", files:[], submittedAt:null};
         const prevList = prev.files || [];
-        n.set(key, { ...prev, files:[...prevList, ...metas] });
+        const added = Array.from(files).map(f=>({ name:f.name, size:f.size, url:URL.createObjectURL(f) }));
+        metas.push(...added);
+        n.set(key, { ...prev, files:[...prevList, ...added] });
         return n;
       });
       return metas;
@@ -458,7 +405,7 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
             {rows.map(({week,rec})=> (
               <tr key={week.id} className="odd:bg-neutral-50/40">
                 <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
-                <td className="px-5 py-4 align-top min-h-[60px]">
+                <td className="px-5 py-4">
                   <button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title || "(제목 없음)"}</button>
                 </td>
                 <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
@@ -482,47 +429,73 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [done,setDone]=useState(false);
   const [errMsg,setErrMsg]=useState("");
 
-  // 업로드 모달 상태
-  const [upOpen, setUpOpen] = useState(false);
-  const [upItems, setUpItems] = useState([]);   // [{name,size,status}]
-  const [upDoneBytes, setUpDoneBytes] = useState(0);
-  const totalBytes = useMemo(() => upItems.reduce((s,i)=>s+(i.size||0), 0), [upItems]);
-  const percent = totalBytes ? (upDoneBytes / totalBytes) * 100 : 0;
+  // 업로드 모달/진행률 상태
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [uploadTotal, setUploadTotal] = useState(0);
+  const [uploadDone, setUploadDone] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const [targetProgress, setTargetProgress] = useState(0);
+  const progressTimerRef = useRef(null);
 
   useEffect(()=>{(async()=>{
     const rec=await store.getRecord(branch.id,week);
     if(rec){ setTitle(rec.title||""); setStatus(rec.status||"REPORT"); setNote(rec.note||""); }
   })();},[branch.id,week,store]);
 
+  // displayProgress를 1%씩 targetProgress로 보간
+  useEffect(() => {
+    if (!isUploading) return;
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    progressTimerRef.current = setInterval(() => {
+      setDisplayProgress((p) => {
+        const cap = (uploadDone === uploadTotal && uploadTotal > 0) ? 100 : 99;
+        if (p >= Math.min(targetProgress, cap)) return p;
+        return Math.min(p + 1, Math.min(targetProgress, cap));
+      });
+    }, 60);
+    return () => { if (progressTimerRef.current) clearInterval(progressTimerRef.current); };
+  }, [isUploading, targetProgress, uploadDone, uploadTotal]);
+
+  const beginUploadUI = (total) => {
+    setIsUploading(true);
+    setUploadTotal(total);
+    setUploadDone(0);
+    setUploadMsg(total ? `0/${total} 파일 업로드 준비…` : "");
+    setDisplayProgress(0);
+    setTargetProgress(0);
+  };
+  const bumpTargetProgress = (done,total) => {
+    const next = Math.floor((done/Math.max(total,1))*100);
+    setTargetProgress((p)=>Math.max(p,next));
+    setUploadMsg(`${done}/${total} 파일 업로드 중…`);
+  };
+  const endUploadUI = () => {
+    setUploadDone(uploadTotal);
+    setTargetProgress(100);
+    setUploadMsg(`업로드 완료`);
+    setTimeout(()=>{ setIsUploading(false); if (progressTimerRef.current) clearInterval(progressTimerRef.current); }, 400);
+  };
+
   const submit = async () => {
     const prev = await store.getRecord(branch.id, week);
     const prevFiles = Array.isArray(prev?.files) ? prev.files : [];
 
-    // 업로드 진행창 초기화
-    if (files?.length) {
-      setUpItems(files.map(f=>({ name:f.name, size:f.size||0, status:'대기' })));
-      setUpDoneBytes(0);
-      setUpOpen(true);
-    }
-
     let uploadedMetas = [];
     try{
-      if(files?.length && store.uploadFiles){
-        uploadedMetas = await store.uploadFiles(
-          branch.id,
-          week,
-          files,
-          (ev)=>{
-            if(ev?.type==='start'){
-              setUpItems(prev=> prev.map((it,idx)=> idx===ev.index ? {...it, status:'업로드중'} : it));
-            }
-            if(ev?.type==='done'){
-              setUpItems(prev=> prev.map((it,idx)=> idx===ev.index ? {...it, status: ev.ok?'완료':'실패'} : it));
-              if (ev.ok) setUpDoneBytes(v=> v + (ev.bytes||0));
-            }
-          }
-        );
-        if (store.storeType === 'supabase' && files.length > 0 && uploadedMetas.length === 0) {
+      const total = Array.isArray(files) ? files.length : 0;
+      beginUploadUI(total);
+      uploadedMetas = [];
+      if(total && store.uploadFiles){
+        let doneCnt = 0;
+        for (const f of files) {
+          const metas = await store.uploadFiles(branch.id, week, [f]);
+          uploadedMetas.push(...metas);
+          doneCnt += 1;
+          setUploadDone(doneCnt);
+          bumpTargetProgress(doneCnt, total);
+        }
+        if (store.storeType === 'supabase' && total > 0 && uploadedMetas.length === 0) {
           alert('업로드가 시도되었지만 저장된 파일 메타가 비었습니다. (버킷/정책/경로 확인)');
         }
       }
@@ -532,18 +505,14 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
     }
 
     const prevPaths = (Array.isArray(prevFiles) ? prevFiles : [])
-      .map(f => (typeof f === "string" ? f : f?.path))
-      .filter(Boolean);
+      .map(f => (typeof f === "string" ? f : f?.path)).filter(Boolean);
     const newPaths = (Array.isArray(uploadedMetas) ? uploadedMetas : [])
-      .map(m => m?.path)
-      .filter(Boolean);
+      .map(m => m?.path).filter(Boolean);
     const filesToSave = Array.from(new Set([...prevPaths, ...newPaths]));
 
     try{
       await store.setRecord(branch.id, week, {
-        title,
-        status,
-        note,
+        title, status, note,
         files: filesToSave,
         submittedAt: new Date().toISOString()
       });
@@ -551,11 +520,11 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       console.error("setRecord failed:", e);
       alert(String(e?.message || e));
       setErrMsg("저장에 실패했습니다.");
-      setUpOpen(false);
+      endUploadUI();
       return;
     }
 
-    setUpOpen(false);
+    endUploadUI();
     setDone(true);
     onSuccess && onSuccess();
     onBack && onBack();
@@ -632,46 +601,29 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
         </div>
       </Card>
 
-      {/* 업로드 진행 모달 */}
-      <Modal
-        open={upOpen}
-        title="첨부파일 업로드 중…"
-        footer={
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-neutral-600">창을 닫지 말고 잠시만 기다려주세요.</div>
-            <Btn disabled>취소 (비활성)</Btn>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">전체 진행률</div>
-            <div className="text-sm font-mono">{Math.round(percent)}%</div>
-          </div>
-          <ProgressBar value={percent} />
-          <div className="text-xs text-neutral-500">
-            {upItems.filter(i=>i.status==='완료').length} / {upItems.length} 개 완료
-            {totalBytes ? ` · ${(upDoneBytes/1024/1024).toFixed(1)}MB / ${(totalBytes/1024/1024).toFixed(1)}MB` : null}
-          </div>
-          <div className="divide-y border rounded-lg">
-            {upItems.map((it,idx)=>(
-              <div key={idx} className="px-3 py-2 flex items-center justify-between">
-                <div className="min-w-0">
-                  <div className="truncate text-sm">{it.name}</div>
-                  <div className="text-xs text-neutral-500">{Math.round((it.size||0)/1024)} KB</div>
-                </div>
-                <div className="text-sm">
-                  {it.status==='대기' && <span className="text-neutral-500">대기</span>}
-                  {it.status==='업로드중' && <span className="text-emerald-700">업로드중…</span>}
-                  {it.status==='완료' && <span className="text-emerald-700">완료</span>}
-                  {it.status==='실패' && <span className="text-red-600">실패</span>}
-                </div>
-              </div>
-            ))}
-            {upItems.length===0 && <div className="px-3 py-6 text-center text-neutral-500 text-sm">첨부가 없습니다.</div>}
+      {/* 업로드 모달 */}
+      {isUploading && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/30">
+          <div className="w-[520px] rounded-2xl border bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold">파일 업로드 중…</h3>
+              <span className="text-sm text-neutral-500">{uploadMsg}</span>
+            </div>
+            <div className="h-3 w-full rounded-full bg-neutral-200 overflow-hidden">
+              <div
+                className="h-full bg-emerald-600 transition-[width] duration-100 linear"
+                style={{ width: `${displayProgress}%` }}
+              />
+            </div>
+            <div className="mt-2 text-right text-sm text-neutral-600">
+              {displayProgress}% ( {uploadDone} / {uploadTotal} )
+            </div>
+            <p className="mt-3 text-xs text-neutral-500">
+              업로드가 끝날 때까지 창을 닫거나 새로고침하지 마세요.
+            </p>
           </div>
         </div>
-      </Modal>
+      )}
     </div>
   );
 }
