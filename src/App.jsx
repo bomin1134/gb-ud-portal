@@ -188,84 +188,37 @@ function useStore(){
           throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
         }
       },
-      async uploadFiles(branchId, weekId, files){
-  const metas = [];
-  for (const f of (files || [])) {
-    // 1) 원본 파일명 보존 (유니코드 NFC)
-    const origName = (f.name || "파일").normalize("NFC");
-
-    // 2) 경로 탈출/제어문자만 정리
-    const cleanedName = origName
-      .replace(/[\/\\]/g, " ")                // 슬래시/역슬래시 제거
-      .replace(/[\u0000-\u001F\u007F]/g, "") // 제어문자 제거
-      .trim();
-
-    // 3) 과도한 길이 방지
-    const dot = cleanedName.lastIndexOf(".");
-    const base = dot > -1 ? cleanedName.slice(0, dot) : cleanedName;
-    const ext  = dot > -1 ? cleanedName.slice(dot) : "";
-    const safeBase = base.slice(0, 170);
-    const safeExt  = ext.slice(0, 10);
-    const finalName = (safeBase || "파일") + safeExt;
-
-    // 4) 업로드 경로
-    const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${finalName}`;
-
-    // 5) 업로드 시도 (자세한 로깅)
-    let resp;
-    try {
-      resp = await client.storage.from(bucket).upload(
-        path,
-        f,
-        { upsert: true, contentType: f.type || undefined }
-      );
-    } catch (e) {
-      console.error("[upload] exception", { path, exception: e });
-      alert("Storage 업로드 예외: " + (e?.message || JSON.stringify(e)));
-      continue; // 다음 파일 진행
-    }
-
-    const { data, error } = resp || {};
-    console.log("[upload] result", { path, data, error });
-
-    // 6) 성공 판정: error가 없고, data?.path 있으면 성공으로 간주
-    if (!error && data && (data.path || data.fullPath)) {
-      const savedPath = data.path || data.fullPath || path;
-      metas.push({ name: finalName, path: savedPath });
-      continue;
-    }
-
-    // 7) 흔한 에러 가드: '이미 존재'류는 upsert:true에도 드물게 발생할 수 있어 재시도
-    if (error && /exist|already/i.test(error.message || "")) {
-      console.warn("[upload] conflict detected, retrying overwrite", { path, error });
-      // conflict일 때 한 번 더 upsert 시도 (동일 옵션 재호출)
-      const retry = await client.storage.from(bucket).upload(
-        path,
-        f,
-        { upsert: true, contentType: f.type || undefined }
-      );
-      if (!retry.error && retry.data && (retry.data.path || retry.data.fullPath)) {
-        const savedPath = retry.data.path || retry.data.fullPath || path;
-        metas.push({ name: finalName, path: savedPath });
-        continue;
-      }
-      console.error("[upload] retry failed", retry);
-      alert("Storage 업로드(덮어쓰기) 실패: " + (retry.error?.message || JSON.stringify(retry.error)));
-      continue;
-    }
-
-    // 8) 기타 에러 처리
-    if (error) {
-      console.error("storage.upload error", error);
-      alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
-    } else {
-      // error는 없는데 data가 비정상인 경우(드물지만 대비)
-      alert("Storage 업로드 응답이 비정상입니다. (data 없음) 경로: " + path);
-    }
-  }
-
-  return metas; // [{ name, path }]
-},
+      async uploadFiles(branchId,weekId,files){
+        const metas=[];
+        for(const f of (files||[])){
+          // 안전한 업로드 키: ASCII만, 공백→_, 특수문자 제거, 길이 제한
+          const origName = (f.name || "file").normalize("NFC");
+          const dot = origName.lastIndexOf(".");
+          const base = dot > -1 ? origName.slice(0, dot) : origName;
+          const ext  = dot > -1 ? origName.slice(dot) : "";
+          let safeBase = base
+            .replace(/\s+/g, "_")
+            .replace(/[^A-Za-z0-9._-]/g, "_")
+            .replace(/_+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(-100);
+          const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0,10).toLowerCase();
+          const safeName = (safeBase || "file") + (safeExt || "");
+          const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
+          const { error } = await client.storage.from(bucket).upload(
+            path,
+            f,
+            { upsert:true, contentType: f.type || undefined }
+          );
+          if(!error){
+            metas.push({ name:safeName, path });
+          } else {
+            console.error("storage.upload error", error);
+            alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
+          }
+        }
+        return metas; // [{name, path}]
+      },
       async getFileUrl(path){
         const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
         return data?.signedUrl || null;
