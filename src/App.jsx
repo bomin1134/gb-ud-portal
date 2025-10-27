@@ -3,10 +3,9 @@ import React, { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 /*
-  GB-UD 지회 보고포털 — v0.3.0 (UI 리디자인: 명확한 대비/카드/포커스 링/지브라 테이블)
-  - 관리자: gbudc / gbudc
-  - 지회: gb001 ~ gb020 (비밀번호 동일)
-  - .env.local 설정 시 Supabase LIVE, 미설정 시 메모리(DEMO)
+  GB-UD 지회 보고포털 — v0.4.0 (속도 패치: 배치 쿼리)
+  - N+1 제거: 지회 화면/관리자 대시보드 모두 1~2회 쿼리로 축소
+  - UI/기능은 기존과 동일
 */
 
 // ----------------------------- 기본 데이터 -----------------------------
@@ -53,7 +52,7 @@ function weekLabelKorean(monday){
   const y=monday.getFullYear();
   const mIdx=monday.getMonth();
   const firstDay = new Date(y, mIdx, 1);
-  const toMon   = (8 - firstDay.getDay()) % 7; // 첫 월요일까지 이동 일수
+  const toMon   = (8 - firstDay.getDay()) % 7;
   const firstMon= new Date(y, mIdx, 1 + toMon);
   const diffDays = Math.floor((monday - firstMon) / (1000*60*60*24));
   const ordinal = diffDays < 0 ? 1 : Math.floor(diffDays/7) + 1;
@@ -88,27 +87,16 @@ function Btn({children,onClick,variant="neutral",className="",type="button"}){
       : "bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50";
   return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>;
 }
-
-function Field({label,children,help}){
-  return (
-    <div className="space-y-2">
-      {label && <label className="text-sm font-semibold text-neutral-800">{label}</label>}
-      {children}
-      {help && <p className="text-xs text-neutral-500">{help}</p>}
-    </div>
-  );
-}
-
-function Input(props){
-  return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
-}
-function Textarea(props){
-  return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
-}
-function Select(props){
-  return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />;
-}
-
+function Field({label,children,help}){ return (
+  <div className="space-y-2">
+    {label && <label className="text-sm font-semibold text-neutral-800">{label}</label>}
+    {children}
+    {help && <p className="text-xs text-neutral-500">{help}</p>}
+  </div>
+); }
+function Input(props){ return <input {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
+function Textarea(props){ return <textarea {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
+function Select(props){ return <select {...props} className={`w-full rounded-lg border border-neutral-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:border-transparent ${props.className||""}`} />; }
 function Card({title,actions,children}){
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
@@ -120,7 +108,6 @@ function Card({title,actions,children}){
     </div>
   );
 }
-
 function StatusChip({statusKey}) {
   const s=STATUS[statusKey]||STATUS.NONE;
   return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>;
@@ -133,42 +120,34 @@ function useStore(){
   const bucket= import.meta.env.VITE_SUPABASE_BUCKET || "reports";
   const table = import.meta.env.VITE_SUPABASE_TABLE  || "submissions";
 
+  // 공통: 레코드 표준화
+  const normalizeRecord = (r)=>({
+    title: r?.title || "",
+    status: r?.status || "NONE",
+    note: r?.note || "",
+    files: Array.isArray(r?.files)
+      ? r.files.map(p => (typeof p==="string" ? { name:fileNameFromPath(p), path:p } : p)).filter(Boolean)
+      : (typeof r?.files === "string" && r.files.length ? [{ name:fileNameFromPath(r.files), path:r.files }] : []),
+    submittedAt: r?.submitted_at || r?.submittedAt || null
+  });
+
   if(url && key){
     const client=createClient(url,key);
     return {
       storeType:"supabase",
+
+      // 단건
       async getRecord(branchId,weekId){
-        const { data } = await client
-          .from(table).select("*")
+        const { data, error } = await client
+          .from(table).select("title,status,note,files,submitted_at")
           .eq("id",`${branchId}_${weekId}`)
           .maybeSingle();
+        if(error) console.error(error);
         if(!data) return { title:"", status:"NONE", note:"", files:[], submittedAt:null };
-
-        const filesArr = Array.isArray(data.files)
-          ? data.files
-          : (typeof data.files === 'string' && data.files.length ? [data.files] : []);
-        const normalizedFiles = filesArr.map(f => {
-          if (typeof f === "string") {
-            const name = fileNameFromPath(f);
-            return { name, path: f };
-          }
-          return {
-            name: f?.name ?? (f?.path ? fileNameFromPath(f.path) : "파일"),
-            path: f?.path ?? null,
-            url:  f?.url ?? null,
-          };
-        });
-
-        return {
-          title: data.title || "",
-          status: data.status || "NONE",
-          note: data.note || "",
-          files: normalizedFiles,
-          submittedAt: data.submitted_at || null
-        };
+        return normalizeRecord(data);
       },
+
       async setRecord(branchId,weekId,rec){
-        // files는 문자열 경로 배열로 통일 저장
         const filesField = Array.isArray(rec.files)
           ? rec.files.map(f => (typeof f === "string" ? f : f?.path)).filter(Boolean)
           : rec.files ?? null;
@@ -183,41 +162,34 @@ function useStore(){
           submitted_at: rec.submittedAt
         };
         const { error } = await client.from(table).upsert(payload);
-        if (error) {
-          console.error("DB upsert error", error, payload);
-          throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error)));
-        }
+        if (error) { console.error("DB upsert error", error, payload); throw new Error("DB 저장 실패: " + (error.message || JSON.stringify(error))); }
       },
+
+      // 업로드(간단 버전: ASCII 안전 이름)
       async uploadFiles(branchId,weekId,files){
         const metas=[];
         for(const f of (files||[])){
-          // 안전한 업로드 키: ASCII만, 공백→_, 특수문자 제거, 길이 제한
           const origName = (f.name || "file").normalize("NFC");
           const dot = origName.lastIndexOf(".");
           const base = dot > -1 ? origName.slice(0, dot) : origName;
           const ext  = dot > -1 ? origName.slice(dot) : "";
           let safeBase = base
-            .replace(/\s+/g, "_")
-            .replace(/[^A-Za-z0-9._-]/g, "_")
-            .replace(/_+/g, "_")
-            .replace(/^_+|_+$/g, "")
-            .slice(-100);
-          const safeExt = ext.replace(/[^A-Za-z0-9.]/g, "").slice(0,10).toLowerCase();
-          const safeName = (safeBase || "file") + (safeExt || "");
+            .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+            .replace(/[^A-Za-z0-9._\- ]/g,"_")
+            .replace(/\s+/g,"_")
+            .replace(/_+/g,"_")
+            .replace(/^[^A-Za-z0-9]+/, "")
+            .replace(/^[_\.]+/,"")
+            .slice(0,100);
+          if(!safeBase) safeBase="file";
+          const safeExt = ext.replace(/[^A-Za-z0-9.]/g,"").slice(0,10).toLowerCase();
+          const safeName = `${safeBase}${safeExt||""}`;
           const path = `gb${String(branchId).padStart(3,"0")}/${weekId}/${safeName}`;
-          const { error } = await client.storage.from(bucket).upload(
-            path,
-            f,
-            { upsert:true, contentType: f.type || undefined }
-          );
-          if(!error){
-            metas.push({ name:safeName, path });
-          } else {
-            console.error("storage.upload error", error);
-            alert("Storage 업로드 실패: " + (error?.message || JSON.stringify(error)));
-          }
+          const { error } = await client.storage.from(bucket).upload(path, f, { upsert:true, contentType: f.type || undefined });
+          if(!error){ metas.push({ name:safeName, path }); }
+          else { console.error("storage.upload error", error); }
         }
-        return metas; // [{name, path}]
+        return metas;
       },
       async getFileUrl(path){
         const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60);
@@ -228,57 +200,122 @@ function useStore(){
         const { data:list } = await client.storage.from(bucket).list(prefix);
         if(list?.length){ await client.storage.from(bucket).remove(list.map(f=>`${prefix}/${f.name}`)); }
         await client.from(table).upsert({
-          id:`${branchId}_${weekId}`,
-          branch_id: branchId,
-          week_id: weekId,
-          title: "",
-          status:"NONE",
-          note:"",
-          files: [],
-          submitted_at: null
+          id:`${branchId}_${weekId}`, branch_id: branchId, week_id: weekId,
+          title: "", status:"NONE", note:"", files: [], submitted_at: null
         });
+      },
+
+      // ===================== 배치 API (속도 핵심) =====================
+      // ❶ 특정 지회 + 여러 주 한번에
+      async getRecordsByBranchWeeks(branchId, weekIds){
+        const { data, error } = await client
+          .from(table)
+          .select("week_id, title, status, note, files, submitted_at")
+          .eq("branch_id", branchId)
+          .in("week_id", weekIds);
+        if (error) { console.error(error); return new Map(); }
+        const map = new Map();
+        for (const r of (data||[])) map.set(r.week_id, normalizeRecord(r));
+        return map;
+      },
+
+      // ❷ 특정 주 + 모든 지회 한번에
+      async getStatusesByWeek(weekId){
+        const { data, error } = await client
+          .from(table)
+          .select("branch_id, status, submitted_at")
+          .eq("week_id", weekId);
+        if (error) { console.error(error); return new Map(); }
+        const map = new Map();
+        for (const r of (data||[])) map.set(r.branch_id, { status: r.status || "NONE", submittedAt: r.submitted_at || null });
+        return map;
+      },
+
+      // ❸ 여러 주(예: 최근 4주) + 모든 지회 한번에
+      async getStatusesForWeeks(weekIds){
+        const { data, error } = await client
+          .from(table)
+          .select("branch_id, week_id, status")
+          .in("week_id", weekIds);
+        if (error) { console.error(error); return new Map(); }
+        const map = new Map(); // branch_id -> (week_id -> status)
+        for (const r of (data||[])) {
+          if (!map.has(r.branch_id)) map.set(r.branch_id, new Map());
+          map.get(r.branch_id).set(r.week_id, r.status || "NONE");
+        }
+        return map;
       }
     };
   }
 
   // 메모리(DEMO)
-  const [map,setMap] = useState(new Map());
+  const [mem,setMem] = useState(new Map());
+  const getKey=(b,w)=>`${b}_${w}`;
   return {
     storeType:"memory",
-    async getRecord(b,w){ return map.get(`${b}_${w}`) || { title:"", status:"NONE", note:"", files:[], submittedAt:null }; },
+    async getRecord(b,w){ return mem.get(getKey(b,w)) || { title:"", status:"NONE", note:"", files:[], submittedAt:null }; },
     async setRecord(b,w,r){
-      setMap(p=>{
+      setMem(p=>{
         const n=new Map(p);
-        const prev=n.get(`${b}_${w}`)||{};
-        n.set(`${b}_${w}`, { ...prev, ...r });
+        const prev=n.get(getKey(b,w))||{};
+        n.set(getKey(b,w), { ...prev, ...r });
         return n;
       });
     },
     async uploadFiles(b,w,files){
       if(!files?.length) return [];
       const metas=[];
-      setMap(p=>{
+      setMem(p=>{
         const n=new Map(p);
-        const key=`${b}_${w}`;
+        const key=getKey(b,w);
         const prev=n.get(key)||{title:"", status:"NONE", note:"", files:[], submittedAt:null};
         const prevList = prev.files || [];
         const added = Array.from(files).map(f=>({ name:f.name, size:f.size, url:URL.createObjectURL(f) }));
-        // 중복 제거(name+size 기준)
         const seen = new Set(prevList.map(x=>`${x.name}|${x.size}`));
         const dedupAdded = added.filter(x=>{ const k=`${x.name}|${x.size}`; if(seen.has(k)) return false; seen.add(k); return true;});
         metas.push(...dedupAdded);
         n.set(key, { ...prev, files:[...prevList, ...dedupAdded] });
         return n;
       });
-      return metas; // [{name, size, url}]
+      return metas;
     },
     async getFileUrl(path){ return path; },
     async deleteWeek(b,w){
-      setMap(p=>{
+      setMem(p=>{
         const n=new Map(p);
-        n.set(`${b}_${w}`, { title:"", status:"NONE", note:"", files:[], submittedAt:null });
+        n.set(getKey(b,w), { title:"", status:"NONE", note:"", files:[], submittedAt:null });
         return n;
       });
+    },
+
+    // ===== 메모리용 배치 구현 =====
+    async getRecordsByBranchWeeks(branchId, weekIds){
+      const map = new Map();
+      for(const wid of weekIds){
+        const r = mem.get(getKey(branchId, wid));
+        if(r) map.set(wid, r); // 이미 표준형
+      }
+      return map;
+    },
+    async getStatusesByWeek(weekId){
+      const map = new Map();
+      for(const b of BRANCHES){
+        const r = mem.get(getKey(b.id, weekId));
+        map.set(b.id, { status: r?.status || "NONE", submittedAt: r?.submittedAt || null });
+      }
+      return map;
+    },
+    async getStatusesForWeeks(weekIds){
+      const map = new Map();
+      for(const b of BRANCHES){
+        const inner = new Map();
+        for(const wid of weekIds){
+          const r = mem.get(getKey(b.id, wid));
+          inner.set(wid, r?.status || "NONE");
+        }
+        map.set(b.id, inner);
+      }
+      return map;
     }
   };
 }
@@ -304,54 +341,47 @@ function Login({onLogin}){
   );
 }
 
-// ----------------------------- 관리자 대시보드 -----------------------------
+// ----------------------------- 관리자 대시보드 (탭) -----------------------------
 function AdminDashboard({store,onOpenBranch}){
-  // 탭: overview(지회보고현황), byWeek(주차별 현황)
   const [tab, setTab] = useState("overview");
 
-  // ====== 기존 카드: 지회 보고 현황(최근 4주 스파크) ======
+  // 최근 4주 스파크: 배치 조회
   const [recent,setRecent]=useState({});
   const [loadingMini,setLoadingMini]=useState(true);
   useEffect(()=>{(async()=>{
-    const rec={};
-    for(const b of BRANCHES){
-      const arr=[];
-      for(const w of WEEKS.slice(0,4)){
-        const r=await store.getRecord(b.id,w.id);
-        arr.push(r.status || "NONE");
-      }
-      rec[b.id]=arr;
+    const weeks4 = WEEKS.slice(0,4).map(w=>w.id);
+    const byBranch = await store.getStatusesForWeeks(weeks4); // Map<branchId, Map<weekId,status>>
+    const rec = {};
+    for (const b of BRANCHES) {
+      const m = byBranch.get(b.id) || new Map();
+      rec[b.id] = weeks4.map(wid => m.get(wid) || "NONE");
     }
     setRecent(rec); setLoadingMini(false);
-  })();},[store]);
+  })().catch(console.error);},[store]);
 
-  // ====== 주차별 전체 지회 현황 ======
+  // 주차별 현황 탭
   const [selectedWeekId, setSelectedWeekId] = useState(WEEKS[0].id);
   const [weekRows, setWeekRows] = useState([]);   // [{ branch, status, submittedAt }]
-  const [statusFilter, setStatusFilter] = useState("ALL"); // ALL | REPORT | OFFICIAL | NONE
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [loadingWeek, setLoadingWeek] = useState(false);
 
   useEffect(()=>{(async()=>{
-    if (tab !== "byWeek") return;  // byWeek 탭에서만 로드
+    if (tab !== "byWeek") return;
     setLoadingWeek(true);
-    const list=[];
-    for(const b of BRANCHES){
-      const r=await store.getRecord(b.id, selectedWeekId);
-      list.push({
-        branch: b,
-        status: r?.status || "NONE",
-        submittedAt: r?.submittedAt || null,
-      });
-    }
+    const map = await store.getStatusesByWeek(selectedWeekId); // Map<branchId, {status,submittedAt}>
+    const list = BRANCHES.map(b => {
+      const v = map.get(b.id) || { status:"NONE", submittedAt:null };
+      return { branch:b, status:v.status, submittedAt:v.submittedAt };
+    });
     setWeekRows(list);
     setLoadingWeek(false);
-  })();},[store, selectedWeekId, tab]);
+  })().catch(console.error);},[store, selectedWeekId, tab]);
 
   const weekIdx = WEEKS.findIndex(w=>w.id===selectedWeekId);
   const gotoPrevWeek = ()=>{ if(weekIdx+1 < WEEKS.length) setSelectedWeekId(WEEKS[weekIdx+1].id); };
   const gotoNextWeek = ()=>{ if(weekIdx-1 >= 0) setSelectedWeekId(WEEKS[weekIdx-1].id); };
-
   const selectedWeek = WEEKS.find(w=>w.id===selectedWeekId) || WEEKS[0];
+
   const filteredRows = weekRows.filter(r=> statusFilter==="ALL" ? true : r.status===statusFilter);
   const total = weekRows.length;
   const cnt = {
@@ -360,33 +390,25 @@ function AdminDashboard({store,onOpenBranch}){
     OFFICIAL: weekRows.filter(r=>r.status==="OFFICIAL").length,
   };
 
-  // 로딩 처리
   if(loadingMini && tab === "overview") return <div className="p-6 text-neutral-500">데이터 불러오는 중…</div>;
 
-  // 탭 버튼 UI
   const TabBtn = ({value, children}) => (
     <button
       onClick={()=>setTab(value)}
       className={`px-4 py-2 rounded-xl text-sm font-semibold border transition
-        ${tab===value
-          ? "bg-neutral-900 text-white border-neutral-900"
-          : "bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50"}`}
+        ${tab===value ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50"}`}
       aria-selected={tab===value}
       role="tab"
-    >
-      {children}
-    </button>
+    >{children}</button>
   );
 
   return (
     <div className="space-y-4">
-      {/* Tabs header */}
       <div className="flex items-center gap-2" role="tablist" aria-label="관리자 대시보드 탭">
         <TabBtn value="overview">지회 보고 현황</TabBtn>
         <TabBtn value="byWeek">주차별 제출 현황</TabBtn>
       </div>
 
-      {/* Tab panels */}
       {tab==="overview" && (
         <Card title="지회 보고 현황">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -511,6 +533,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
                   return (
                     <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
                       onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
+                      title={name}
                     >📎 {name}</button>
                   );
                 }
@@ -527,14 +550,14 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 // ----------------------------- 지회 홈 -----------------------------
 function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
   const [rows,setRows]=useState([]);
+
+  // ✅ 배치 조회 적용: 12회 → 1회
   useEffect(()=>{(async()=>{
-    const arr=[];
-    for(const w of WEEKS){
-      const r=await store.getRecord(branch.id,w.id);
-      arr.push({week:w,rec:r});
-    }
+    const weekIds = WEEKS.map(w=>w.id);
+    const recMap = await store.getRecordsByBranchWeeks(branch.id, weekIds); // Map<weekId, rec>
+    const arr = WEEKS.map(w => ({ week:w, rec: recMap.get(w.id) || { title:"", status:"NONE", note:"", files:[], submittedAt:null } }));
     setRows(arr);
-  })();},[store,branch.id,refreshKey]);
+  })().catch(console.error);},[store,branch.id,refreshKey]);
 
   const handleDelete=async(weekId)=>{
     if(!confirm("정말 삭제하시겠습니까?")) return;
@@ -563,7 +586,7 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-200">
-            {rows.map(({week,rec}, idx)=> (
+            {rows.map(({week,rec})=> (
               <tr key={week.id} className="odd:bg-neutral-50/40">
                 <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
                 <td className="px-5 py-4 align-top min-h-[60px]">
@@ -604,7 +627,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       if(files?.length && store.uploadFiles){
         uploadedMetas = await store.uploadFiles(branch.id, week, files);
         if (store.storeType === 'supabase' && files.length > 0 && uploadedMetas.length === 0) {
-          alert('업로드가 시도되었지만 저장된 파일 메타가 비었습니다. (버킷/정책/경로 확인)');
+          setErrMsg('업로드가 시도되었지만 저장된 파일 메타가 비었습니다.');
         }
       }
     }catch(e){
@@ -612,7 +635,6 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       setErrMsg("파일 업로드는 실패했지만 제목/상태/내용은 저장합니다.");
     }
 
-    // 문자열 경로만 병합
     const prevPaths = (Array.isArray(prevFiles) ? prevFiles : [])
       .map(f => (typeof f === "string" ? f : f?.path))
       .filter(Boolean);
@@ -623,9 +645,7 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
 
     try{
       await store.setRecord(branch.id, week, {
-        title,
-        status,
-        note,
+        title, status, note,
         files: filesToSave,
         submittedAt: new Date().toISOString()
       });
@@ -738,7 +758,7 @@ export default function App(){
       <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-neutral-200">
         <div className="mx-auto min-w-[1100px] max-w-[1400px] px-6 py-3 flex justify-between items-center">
           <div className="font-extrabold tracking-tight text-neutral-900 flex items-center gap-3">
-            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.3</span>
+            GB-UD 지회 보고포털 <span className="text-xs px-2 py-0.5 rounded-full border border-emerald-500 text-emerald-700">v0.4</span>
             <span className={`text-xs px-2 py-0.5 rounded-full border ${store.storeType==='supabase' ? 'border-emerald-500 text-emerald-700' : 'border-neutral-400 text-neutral-600'}`}>
               {store.storeType==='supabase' ? 'Supabase' : 'Demo'}
             </span>
