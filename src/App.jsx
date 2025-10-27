@@ -76,6 +76,40 @@ function Card({title,actions,children}){ return (<div className="rounded-2xl bor
 function StatusChip({statusKey}){ const s=STATUS[statusKey]||STATUS.NONE; return <span className={`inline-flex items-center gap-1 ${s.color} rounded-full px-3 py-1 text-xs shadow-sm`}>● {s.label}</span>; }
 function Tabs({tabs,active,onChange}){ return (<div className="flex items-center gap-2 border-b pb-2 mb-4">{tabs.map(t=> <button key={t.key} onClick={()=>onChange(t.key)} className={`px-3 py-1.5 rounded-md text-sm font-semibold ${active===t.key? 'bg-neutral-900 text-white':'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`}>{t.label}</button>)}</div>); }
 
+// 중앙 로딩 모달
+function LoadingModal({text="로딩 중…"}){
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-2xl shadow-lg px-6 py-5 flex items-center gap-4">
+        <div className="w-8 h-8 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin" />
+        <div className="text-neutral-700 font-medium">{text}</div>
+      </div>
+    </div>
+  );
+}
+
+// 파일 미리보기/다운로드 헬퍼를 포함한 작은 미리보기 모달
+function PreviewModal({open, onClose, item}){
+  if(!open || !item) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-xl shadow-xl max-w-[90vw] max-h-[90vh] overflow-auto p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold">{item.name}</div>
+          <button className="text-sm text-neutral-500" onClick={onClose}>닫기</button>
+        </div>
+        <div className="max-w-[80vw] max-h-[70vh]">
+          {item.type==='image' && <img src={item.url} alt={item.name} className="max-w-full max-h-[70vh] object-contain" />}
+          {item.type==='pdf' && <iframe title={item.name} src={item.url} className="w-[80vw] h-[70vh] border" />}
+          {!item.type && (<div className="text-sm text-neutral-600">미리보기가 지원되지 않는 파일입니다.</div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ----------------------------- Store (Supabase or Memory) -----------------------------
 function useStore(){
   const url   = import.meta.env.VITE_SUPABASE_URL;
@@ -275,7 +309,7 @@ function AdminDashboard({store,onOpenBranch}){
       />
 
       {tab==='overview' && (
-        loadingOverview ? <div className="p-6 text-neutral-500">데이터 불러오는 중…</div> : (
+        loadingOverview ? <LoadingModal text="데이터를 불러오는 중…" /> : (
           <Card title="지회 보고 현황 (최근 4주)">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {BRANCHES.map(b=>{
@@ -307,7 +341,7 @@ function AdminDashboard({store,onOpenBranch}){
               {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
             </Select>
           </div>
-          {loadingWeekly ? <div className="text-neutral-500">불러오는 중…</div> : (
+          {loadingWeekly ? <LoadingModal text="데이터를 불러오는 중…" /> : (
             <div className="rounded-xl border border-neutral-200 overflow-hidden">
               <table className="w-full">
                 <thead className="bg-neutral-50">
@@ -339,8 +373,56 @@ function AdminDashboard({store,onOpenBranch}){
 
 // ----------------------------- 상세 보기 -----------------------------
 function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
+  const [previewOpen,setPreviewOpen]=useState(false);
+  const [previewItem,setPreviewItem]=useState(null);
+  const [downloading,setDownloading]=useState(false);
+
+  const handleFileOpen = async (f)=>{
+    try{
+      const isString = typeof f === "string";
+      const path = isString ? f : f?.path;
+      const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
+      const url = await store.getFileUrl(path);
+      if(!url) return alert('파일을 불러올 수 없습니다.');
+
+      // 일부 데모/비표준 URL일 수 있어서 http(s)인 경우에만 fetch로 blob 처리
+      if(!url.startsWith('http')){
+        // 비표준 URL (예: demo://...) 은 새 창으로 연다
+        window.open(url, '_blank');
+        return;
+      }
+
+      // fetch as blob to preserve filename on download and to enable preview
+      setDownloading(true);
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const ext = (name.split('.').pop()||'').toLowerCase();
+      if(['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext)){
+        setPreviewItem({ type:'image', url:blobUrl, name }); setPreviewOpen(true);
+      } else if(ext==='pdf'){
+        setPreviewItem({ type:'pdf', url:blobUrl, name }); setPreviewOpen(true);
+      } else {
+        const a=document.createElement('a'); a.href=blobUrl; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(blobUrl), 5000);
+      }
+    }catch(e){ console.error(e); alert('파일을 열 수 없습니다.'); }
+    finally{ setDownloading(false); }
+  };
+
+  const handleDelete = async ()=>{
+    if(!confirm('이 제출을 삭제하시겠습니까? 삭제하면 복구할 수 없습니다.')) return;
+    try{
+      await store.deleteWeek(branch.id, week.id);
+      alert('삭제되었습니다.');
+      onBack && onBack();
+    }catch(e){ console.error(e); alert('삭제에 실패했습니다.'); }
+  };
+
   return (
     <div className="space-y-4">
+      <PreviewModal open={previewOpen} onClose={()=>{ setPreviewOpen(false); setPreviewItem(null); }} item={previewItem} />
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Btn onClick={onBack} variant="soft">↩ 목록</Btn>
@@ -349,6 +431,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
         <div className="flex items-center gap-3">
           <StatusChip statusKey={rec.status} />
           <Btn variant="primary" onClick={onEdit}>수정</Btn>
+          <Btn onClick={handleDelete} variant="soft">삭제</Btn>
         </div>
       </div>
 
@@ -365,9 +448,10 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
                 const path = isString ? f : f?.path;
                 const name = isString ? fileNameFromPath(f) : (f?.name || (path ? fileNameFromPath(path) : "파일"));
                 return (
-                  <button key={i} className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit"
-                    onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}
-                  >📎 {name}</button>
+                  <div key={i} className="flex items-center gap-2">
+                    <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit" onClick={()=>handleFileOpen(f)} disabled={downloading}>📎 {name}</button>
+                    <button className="text-sm text-neutral-500" onClick={async()=>{ const u=await store.getFileUrl(path); if(u) window.open(u,'_blank'); }}>원본 열기</button>
+                  </div>
                 );
               })}
             </div>
@@ -381,6 +465,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 // ----------------------------- 지회 홈 -----------------------------
 function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
   const [rows,setRows]=useState([]);
+  const [tab,setTab]=useState('list'); // 'list' | 'notice'
   useEffect(()=>{(async()=>{
     // 속도개선: 주차 12개 데이터를 in() 한방으로
     const weekIds=WEEKS.map(w=>w.id);
@@ -396,31 +481,39 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
           {isAdmin && <Btn onClick={onAdminBack} variant="soft">↩ 뒤로가기</Btn>}
           <h1 className="text-2xl font-extrabold text-neutral-900">{branch.name} — 제출현황</h1>
         </div>
-        <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>
+        {tab==='list' && <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>}
       </div>
 
-      <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
-        <table className="w-full text-base leading-relaxed">
-          <thead className="bg-neutral-50/80">
-            <tr className="text-left text-neutral-700">
-              <th className="px-5 py-3">주차</th>
-              <th className="px-5 py-3">제목</th>
-              <th className="px-5 py-3">제출일시</th>
-              <th className="px-5 py-3 text-right">상태</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-200">
-            {rows.map(({week,rec})=> (
-              <tr key={week.id} className="odd:bg-neutral-50/40">
-                <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
-                <td className="px-5 py-4"><button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title||"(제목 없음)"}</button></td>
-                <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
-                <td className="px-5 py-4 text-right"><StatusChip statusKey={rec.status}/></td>
+      <Tabs tabs={[{key:'list',label:'제출현황'},{key:'notice',label:'공지사항'}]} active={tab} onChange={setTab} />
+
+      {tab==='list' && (
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+          <table className="w-full text-base leading-relaxed">
+            <thead className="bg-neutral-50/80">
+              <tr className="text-left text-neutral-700">
+                <th className="px-5 py-3">주차</th>
+                <th className="px-5 py-3">제목</th>
+                <th className="px-5 py-3">제출일시</th>
+                <th className="px-5 py-3 text-right">상태</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-neutral-200">
+              {rows.map(({week,rec})=> (
+                <tr key={week.id} className="odd:bg-neutral-50/40">
+                  <td className="px-5 py-4 whitespace-nowrap text-neutral-800">{week.label}</td>
+                  <td className="px-5 py-4"><button className="underline underline-offset-2 decoration-neutral-400 hover:decoration-neutral-800" onClick={()=>onOpenDetail(week.id)}>{rec.title||"(제목 없음)"}</button></td>
+                  <td className="px-5 py-4 text-neutral-800">{rec.submittedAt ? new Date(rec.submittedAt).toLocaleString() : "—"}</td>
+                  <td className="px-5 py-4 text-right"><StatusChip statusKey={rec.status}/></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab==='notice' && (
+        <NoticeBoard store={store} isAdmin={isAdmin} />
+      )}
     </div>
   );
 }
@@ -592,6 +685,6 @@ function DetailWrapper({branch,store,weekId,onBack,onEdit}){
   const [rec,setRec]=useState(null);
   const week = WEEKS.find(w=>w.id===weekId) || WEEKS[0];
   useEffect(()=>{(async()=>{ const r=await store.getRecord(branch.id, weekId); setRec(r); })();},[branch.id,weekId,store]);
-  if(!rec) return <div className="p-6 text-neutral-500">불러오는 중…</div>;
+  if(!rec) return <LoadingModal text="자료를 불러오는 중…" />;
   return <SubmissionDetail branch={branch} week={week} rec={rec} store={store} onBack={onBack} onEdit={onEdit}/>;
 }
