@@ -38,7 +38,6 @@ function startOfWeekMonday(d){ const x=new Date(d); const n=x.getDay(); const di
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function koreanOrdinal(n){ return ["첫째","둘째","셋째","넷째","다섯째"][n-1]||`${n}째`; }
 function ymdLocal(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
-function weekLabelKorean(monday){ const y=monday.getFullYear(); const mIdx=monday.getMonth(); const firstDay = new Date(y, mIdx, 1); const toMon = (8-firstDay.getDay())%7; const firstMon = new Date(y, mIdx, 1+toMon); const diffDays=Math.floor((monday-firstMon)/(1000*60*60*24)); const ordinal = diffDays<0?1:Math.floor(diffDays/7)+1; const m=mIdx+1; return `${y} ${m}월 ${koreanOrdinal(ordinal)}주`; }
 function weekLabelKorean(monday){ const y=monday.getFullYear(); const mIdx=monday.getMonth(); const firstDay = new Date(y, mIdx, 1); const toMon = (8-firstDay.getDay())%7; const firstMon = new Date(y, mIdx, 1+toMon); const diffDays=Math.floor((monday-firstMon)/(1000*60*60*24)); const ordinal = diffDays<0?1:Math.floor(diffDays/7)+1; const m=mIdx+1; return `${y}년 ${m}월 ${koreanOrdinal(ordinal)}주`; }
 function makeWeeks(c=12){ const w=[]; let cur=startOfWeekMonday(new Date()); for(let i=0;i<c;i++){ const s=new Date(cur); const e=addDays(s,6); w.push({ id: ymdLocal(s), label: weekLabelKorean(s), start:s, end:e }); cur=addDays(cur,-7);} return w; }
 const WEEKS = makeWeeks(12);
