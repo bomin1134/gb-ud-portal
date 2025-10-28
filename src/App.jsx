@@ -289,7 +289,6 @@ function NoticeBoard({store,isAdmin}){
   const [previewItem,setPreviewItem]=useState(null);
   const [selectedNotice,setSelectedNotice]=useState(null);
   const [showCompose,setShowCompose]=useState(false);
-  const [selectedNotice,setSelectedNotice]=useState(null);
 
   const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
   useEffect(()=>{ load(); },[store]);
