@@ -39,6 +39,7 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function koreanOrdinal(n){ return ["첫째","둘째","셋째","넷째","다섯째"][n-1]||`${n}째`; }
 function ymdLocal(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const day=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${day}`; }
 function weekLabelKorean(monday){ const y=monday.getFullYear(); const mIdx=monday.getMonth(); const firstDay = new Date(y, mIdx, 1); const toMon = (8-firstDay.getDay())%7; const firstMon = new Date(y, mIdx, 1+toMon); const diffDays=Math.floor((monday-firstMon)/(1000*60*60*24)); const ordinal = diffDays<0?1:Math.floor(diffDays/7)+1; const m=mIdx+1; return `${y} ${m}월 ${koreanOrdinal(ordinal)}주`; }
+function weekLabelKorean(monday){ const y=monday.getFullYear(); const mIdx=monday.getMonth(); const firstDay = new Date(y, mIdx, 1); const toMon = (8-firstDay.getDay())%7; const firstMon = new Date(y, mIdx, 1+toMon); const diffDays=Math.floor((monday-firstMon)/(1000*60*60*24)); const ordinal = diffDays<0?1:Math.floor(diffDays/7)+1; const m=mIdx+1; return `${y}년 ${m}월 ${koreanOrdinal(ordinal)}주`; }
 function makeWeeks(c=12){ const w=[]; let cur=startOfWeekMonday(new Date()); for(let i=0;i<c;i++){ const s=new Date(cur); const e=addDays(s,6); w.push({ id: ymdLocal(s), label: weekLabelKorean(s), start:s, end:e }); cur=addDays(cur,-7);} return w; }
 const WEEKS = makeWeeks(12);
 
@@ -206,6 +207,21 @@ function useStore(){
         }
         return metas;
       },
+      // notice 전용 파일 업로드 (notices/{safe})
+      async uploadNoticeFiles(files){
+        const metas=[];
+        for(const f of (files||[])){
+          const orig=f.name||"file";
+          const dot=orig.lastIndexOf(".");
+          const ext= dot>-1 ? orig.slice(dot).replace(/[^A-Za-z0-9.]/g,"").toLowerCase() : "";
+          const safe = crypto?.randomUUID ? crypto.randomUUID()+ext : (Math.random().toString(36).slice(2)+Date.now().toString(36))+ext;
+          const path=`notices/${safe}`;
+          const { error } = await client.storage.from(bucket).upload(path, f, { upsert:true, contentType:f.type||undefined });
+          if(error){ console.error("storage.upload error", error); alert("Storage 업로드 실패: "+(error?.message||JSON.stringify(error))); }
+          else { metas.push({ name:orig, path }); }
+        }
+        return metas;
+      },
       async getFileUrl(path){ const { data } = await client.storage.from(bucket).createSignedUrl(path, 60*60); return data?.signedUrl||null; },
       async deleteWeek(branchId,weekId){
         const prefix=`gb${String(branchId).padStart(3,"0")}/${weekId}`;
@@ -215,12 +231,13 @@ function useStore(){
       },
       // --- 공지사항 ---
       async listNotices(limit=20){
-        const { data, error } = await client.from(noticeTable).select("id,title,body,author,created_at").order("created_at", { ascending:false }).limit(limit);
+        const { data, error } = await client.from(noticeTable).select("id,title,body,author,created_at,files").order("created_at", { ascending:false }).limit(limit);
         if(error){ console.error(error); return []; }
         return data||[];
       },
-      async createNotice(title, body, author){
-        const { error } = await client.from(noticeTable).insert({ title, body, author });
+      async createNotice(title, body, author, files){
+        const filesField = serializeFilesForDB(files);
+        const { error } = await client.from(noticeTable).insert({ title, body, author, files: filesField });
         if(error){ console.error(error); throw new Error(error.message||"공지 저장 실패"); }
       }
     };
@@ -236,10 +253,11 @@ function useStore(){
     async getStatusesMatrix(branchIds,weekIds){ const rows=[]; for(const bid of branchIds){ for(const wk of weekIds){ const r=map.get(`${bid}_${wk}`); if(r) rows.push({branch_id:bid, week_id:wk, status:r.status}); }} return rows; },
     async setRecord(b,w,r){ setMap(p=>{ const n=new Map(p); const prev=n.get(`${b}_${w}`)||{}; n.set(`${b}_${w}`, {...prev,...r}); return n; }); },
     async uploadFiles(b,w,files){ return Array.from(files||[]).map(f=>({name:f.name, path:`demo://${f.name}`})); },
+    async uploadNoticeFiles(files){ return Array.from(files||[]).map(f=>({name:f.name, path:`demo://notice/${f.name}`})); },
     async getFileUrl(p){ return p; },
     async deleteWeek(b,w){ setMap(p=>{ const n=new Map(p); n.set(`${b}_${w}`, {title:"",status:"NONE",note:"",files:[],submittedAt:null}); return n;}); },
     async listNotices(){ return notices; },
-    async createNotice(title,body,author){ setNotices(p=>[{id:Date.now(), title, body, author, created_at:new Date().toISOString()}, ...p]); }
+    async createNotice(title,body,author, files){ setNotices(p=>[{id:Date.now(), title, body, author, created_at:new Date().toISOString(), files: files||[]}, ...p]); }
   };
 }
 
@@ -265,14 +283,48 @@ function NoticeBoard({store,isAdmin}){
   const [items,setItems]=useState([]);
   const [title,setTitle]=useState("");
   const [body,setBody]=useState("");
+  const [noticeFiles,setNoticeFiles]=useState([]);
+  const [uploading,setUploading]=useState(false);
+  const [previewOpen,setPreviewOpen]=useState(false);
+  const [previewItem,setPreviewItem]=useState(null);
 
   const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
   useEffect(()=>{ load(); },[store]);
 
   const submit=async()=>{
     if(!title.trim()||!body.trim()) return alert('제목/내용을 입력하세요');
-    try{ await store.createNotice(title.trim(), body.trim(), 'admin'); setTitle(""); setBody(""); await load(); }
-    catch(e){ alert(e.message||'공지 저장 실패'); }
+    try{
+      setUploading(true);
+      // 업로드 파일이 있으면 별도 업로드 API를 호출
+      let metas = [];
+      if((noticeFiles||[]).length>0){ metas = await store.uploadNoticeFiles(noticeFiles); }
+      await store.createNotice(title.trim(), body.trim(), 'admin', metas);
+      setTitle(""); setBody(""); setNoticeFiles([]);
+      await load();
+    }catch(e){ alert(e.message||'공지 저장 실패'); }
+    finally{ setUploading(false); }
+  };
+
+  const handleFileOpen = async (f) => {
+    try{
+      const path = f?.path || (typeof f==='string'? f : null);
+      const name = f?.name || (path? fileNameFromPath(path) : '파일');
+      const url = await store.getFileUrl(path);
+      if(!url) return alert('파일을 불러올 수 없습니다.');
+      if(!url.startsWith('http')){ window.open(url,'_blank'); return; }
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const ext = (name.split('.').pop()||'').toLowerCase();
+      if(['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext)){
+        setPreviewItem({ type:'image', url:blobUrl, name }); setPreviewOpen(true);
+      } else if(ext==='pdf'){
+        setPreviewItem({ type:'pdf', url:blobUrl, name }); setPreviewOpen(true);
+      } else {
+        const a=document.createElement('a'); a.href=blobUrl; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(blobUrl),5000);
+      }
+    }catch(e){ console.error(e); alert('파일을 열 수 없습니다.'); }
   };
 
   return (
@@ -282,23 +334,43 @@ function NoticeBoard({store,isAdmin}){
           <div className="space-y-3">
             <Field label="제목"><Input value={title} onChange={e=>setTitle(e.target.value)} /></Field>
             <Field label="내용"><Textarea rows={4} value={body} onChange={e=>setBody(e.target.value)} /></Field>
-            <Btn variant="primary" onClick={submit}>등록</Btn>
+            <Field label="첨부 파일"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]))} /></Field>
+            <div className="flex items-center gap-2">
+              <Btn variant="primary" onClick={submit} disabled={uploading}>{uploading? '업로드 중…' : '등록'}</Btn>
+              <div className="text-sm text-neutral-500">{(noticeFiles||[]).length>0 ? `${noticeFiles.length}개 파일 선택됨` : ''}</div>
+            </div>
           </div>
         </Card>
       )}
 
       <Card title="공지 목록">
-        <ul className="divide-y divide-neutral-200">
-          {(items||[]).map(n=> (
+          <ul className="divide-y divide-neutral-200">
+          {(items||[]).map(n=> {
+            const fileMetas = normalizeFilesField(n.files);
+            return (
             <li key={n.id} className="py-3">
               <div className="font-semibold text-neutral-900">{n.title}</div>
               <div className="text-sm text-neutral-500">{new Date(n.created_at).toLocaleString()} · {n.author||'관리자'}</div>
               <div className="mt-2 whitespace-pre-wrap leading-relaxed">{n.body}</div>
+              {fileMetas.length>0 && (
+                <div className="mt-2">
+                  <div className="text-sm font-semibold text-neutral-800 mb-1">첨부</div>
+                  <div className="flex flex-col gap-2">
+                    {fileMetas.map((f,i)=> (
+                      <div key={i} className="flex items-center gap-3">
+                        <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit" onClick={()=>handleFileOpen(f)}>📎 {f.name}</button>
+                        <button className="text-sm text-neutral-500" onClick={()=>handleFileOpen(f)}>열기 / 다운로드</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </li>
-          ))}
+          )})}
           {(!items||items.length===0)&&<li className="py-6 text-neutral-500">등록된 공지가 없습니다.</li>}
         </ul>
       </Card>
+      <PreviewModal open={previewOpen} onClose={()=>{ try{ if(previewItem?.url && previewItem.url.startsWith('blob:')) URL.revokeObjectURL(previewItem.url); }catch(e){} setPreviewOpen(false); setPreviewItem(null); }} item={previewItem} />
     </div>
   );
 }
