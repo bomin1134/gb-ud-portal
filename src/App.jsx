@@ -83,6 +83,22 @@ function serializeFilesForDB(files){
   return JSON.stringify(arr);
 }
 
+// Extract files robustly from a drag event (supports dataTransfer.files and dataTransfer.items)
+function extractFilesFromEvent(e){
+  try{
+    const dt = e?.dataTransfer;
+    if(!dt) return [];
+    if(dt.files && dt.files.length>0) return Array.from(dt.files);
+    const out = [];
+    if(dt.items && dt.items.length>0){
+      for(const it of dt.items){
+        try{ if(it.kind==='file'){ const f = it.getAsFile(); if(f) out.push(f); } }catch(e){ /* ignore */ }
+      }
+    }
+    return out;
+  }catch(e){ return []; }
+}
+
 // ----------------------------- 공용 컴포넌트 -----------------------------
 function Btn({children,onClick,variant="neutral",className="",type="button"}){ const base="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"; const style=variant==="primary"?"bg-neutral-900 text-white hover:bg-neutral-800 shadow-sm":variant==="soft"?"bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200":variant==="danger"?"bg-red-600 text-white hover:bg-red-700 shadow-sm":"bg-white text-neutral-800 border border-neutral-300 hover:bg-neutral-50"; return <button type={type} onClick={onClick} className={`${base} ${style} ${className}`}>{children}</button>; }
 function Field({label,children,help}){ return (<div className="space-y-2">{label&&<label className="text-sm font-semibold text-neutral-800">{label}</label>}{children}{help&&<p className="text-xs text-neutral-500">{help}</p>}</div>); }
@@ -306,6 +322,11 @@ function NoticeBoard({store,isAdmin}){
   const [previewItem,setPreviewItem]=useState(null);
   const [selectedNotice,setSelectedNotice]=useState(null);
   const [showCompose,setShowCompose]=useState(false);
+  const [noticeDragOver,setNoticeDragOver]=useState(false);
+
+  const onNoticeDragOver = (e)=>{ e.preventDefault(); e.stopPropagation(); try{ e.dataTransfer.dropEffect='copy'; }catch{} setNoticeDragOver(true); };
+  const onNoticeDragLeave = (e)=>{ e.preventDefault(); e.stopPropagation(); setNoticeDragOver(false); };
+  const onNoticeDrop = (e)=>{ e.preventDefault(); e.stopPropagation(); setNoticeDragOver(false); const dropped = extractFilesFromEvent(e); if(dropped.length>0) setNoticeFiles(prev=>[...prev,...dropped].slice(0,10)); };
 
   const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
   useEffect(()=>{ load(); },[store]);
@@ -406,10 +427,11 @@ function NoticeBoard({store,isAdmin}){
               <Field label="내용"><Textarea rows={8} value={body} onChange={e=>setBody(e.target.value)} /></Field>
 
               <div
-                className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
-                onDragOver={e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect = 'copy'; }catch{} }}
-                onDragEnter={e=>{ e.preventDefault(); }}
-                onDrop={e=>{ e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setNoticeFiles(prev=>[...prev,...dropped].slice(0,10)); }}
+                className={`border-2 border-dashed rounded-xl p-6 text-sm transition ${noticeDragOver ? 'ring-2 ring-emerald-400 bg-white' : 'bg-neutral-50 hover:bg-neutral-100'}`}
+                onDragOver={onNoticeDragOver}
+                onDragEnter={onNoticeDragOver}
+                onDragLeave={onNoticeDragLeave}
+                onDrop={onNoticeDrop}
               >
                 여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 10개)
                 <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]).slice(0,10))} /></div>
@@ -785,6 +807,11 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [files,setFiles]=useState([]);
   const [saving,setSaving]=useState(false);
   const [progress,setProgress]=useState(0);
+  const [submitDragOver,setSubmitDragOver]=useState(false);
+
+  const onSubmitDragOver = (e)=>{ e.preventDefault(); e.stopPropagation(); try{ e.dataTransfer.dropEffect='copy'; }catch{} setSubmitDragOver(true); };
+  const onSubmitDragLeave = (e)=>{ e.preventDefault(); e.stopPropagation(); setSubmitDragOver(false); };
+  const onSubmitDrop = (e)=>{ e.preventDefault(); e.stopPropagation(); setSubmitDragOver(false); const dropped = extractFilesFromEvent(e); if(dropped.length>0) setFiles(prev=>[...prev,...dropped].slice(0,10)); };
   // hierarchical selects
   const yearRange = useMemo(()=>{ const arr=[]; for(let y=2020;y<=2030;y++) arr.push(y); return arr.reverse(); },[]);
   const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
@@ -887,10 +914,11 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
           <Field label="내용"><Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} /></Field>
 
           <div
-            className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
-            onDragOver={e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect = 'copy'; }catch{} }}
-            onDragEnter={e=>{ e.preventDefault(); }}
-            onDrop={e=>{ e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,10)); }}
+            className={`border-2 border-dashed rounded-xl p-6 text-sm transition ${submitDragOver ? 'ring-2 ring-emerald-400 bg-white' : 'bg-neutral-50 hover:bg-neutral-100'}`}
+            onDragOver={onSubmitDragOver}
+            onDragEnter={onSubmitDragOver}
+            onDragLeave={onSubmitDragLeave}
+            onDrop={onSubmitDrop}
           >
             여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 10개)
             <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,10))} /></div>
