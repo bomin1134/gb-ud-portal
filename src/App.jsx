@@ -42,6 +42,23 @@ function weekLabelKorean(monday){ const y=monday.getFullYear(); const mIdx=monda
 function makeWeeks(c=12){ const w=[]; let cur=startOfWeekMonday(new Date()); for(let i=0;i<c;i++){ const s=new Date(cur); const e=addDays(s,6); w.push({ id: ymdLocal(s), label: weekLabelKorean(s), start:s, end:e }); cur=addDays(cur,-7);} return w; }
 const WEEKS = makeWeeks(12);
 
+// Generate all week objects (Mon-start) for a full year
+function weeksForYear(year){
+  const w=[];
+  const firstOfYear = new Date(year,0,1);
+  // find first Monday on/after Jan 1
+  let cur = startOfWeekMonday(firstOfYear);
+  // ensure cur is within the year (could be last year's Dec) - advance to first Monday >= Jan 1
+  while(cur.getFullYear() < year){ cur = addDays(cur,7); }
+  while(cur.getFullYear()===year){ const s=new Date(cur); const e=addDays(s,6); w.push({ id: ymdLocal(s), label: weekLabelKorean(s), start:s, end:e }); cur = addDays(cur,7); }
+  return w;
+}
+
+function weeksForMonth(year,month){ // month: 1..12
+  const all = weeksForYear(year);
+  return all.filter(w=> w.start.getMonth()+1 === Number(month));
+}
+
 // ----------------------------- helpers -----------------------------
 function fileNameFromPath(p){ if(!p) return "파일"; const parts=String(p).split("/"); return parts[parts.length-1]||String(p); }
 function uniq(arr){ return Array.from(new Set(arr)); }
@@ -657,8 +674,8 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
 
   // Year / Month filters
   const years = useMemo(()=>{
-    const ys = Array.from(new Set(WEEKS.map(w=> w.start.getFullYear()))).sort((a,b)=>b-a);
-    return ys;
+    const cy = (new Date()).getFullYear();
+    return [cy, cy-1, cy-2];
   },[]);
   const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
   const [selectedMonth,setSelectedMonth]=useState('all'); // 'all' or '1'..'12'
@@ -669,11 +686,14 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
   },[years]);
 
   useEffect(()=>{(async()=>{
-    // Filter weeks by selected year/month
-    const filtered = WEEKS.filter(w=>{
-      const y = w.start.getFullYear();
+    // Choose base weeks depending on selectedYear
+    let baseWeeks = WEEKS;
+    if(selectedYear && selectedYear!=='all'){
+      baseWeeks = weeksForYear(Number(selectedYear));
+    }
+    // apply month filter
+    const filtered = baseWeeks.filter(w=>{
       const m = w.start.getMonth()+1;
-      if(selectedYear && selectedYear!=='all' && Number(selectedYear)!==y) return false;
       if(selectedMonth && selectedMonth!=='all' && Number(selectedMonth)!==m) return false;
       return true;
     });
