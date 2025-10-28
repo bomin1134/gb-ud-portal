@@ -678,7 +678,7 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
     const arr=[]; for(let y=2020;y<=2030;y++) arr.push(y); return arr.reverse();
   },[]);
   const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
-  const [selectedMonth,setSelectedMonth]=useState('all'); // 'all' or '1'..'12'
+  const [selectedMonth,setSelectedMonth]=useState(String((new Date()).getMonth()+1)); // default to current month
 
   useEffect(()=>{
     // initialize selectedYear to available year if current year not present
