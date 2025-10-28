@@ -288,6 +288,8 @@ function NoticeBoard({store,isAdmin}){
   const [previewOpen,setPreviewOpen]=useState(false);
   const [previewItem,setPreviewItem]=useState(null);
   const [selectedNotice,setSelectedNotice]=useState(null);
+  const [showCompose,setShowCompose]=useState(false);
+  const [selectedNotice,setSelectedNotice]=useState(null);
 
   const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
   useEffect(()=>{ load(); },[store]);
@@ -341,29 +343,11 @@ function NoticeBoard({store,isAdmin}){
 
   return (
     <div className="space-y-4">
-      {isAdmin && (
-        <Card title="공지 작성">
-          <div className="space-y-3">
-            <Field label="제목"><Input value={title} onChange={e=>setTitle(e.target.value)} /></Field>
-            <Field label="내용"><Textarea rows={4} value={body} onChange={e=>setBody(e.target.value)} /></Field>
-            <div className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition" onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setNoticeFiles(prev=>[...prev,...dropped].slice(0,5));}}>
-              여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
-              <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]))} /></div>
-            </div>
-
-            {uploading && (
-              <LoadingModal open={true} text={`업로드 중…`} progress={progress} items={noticeFiles.map(f=>({ name: f?.name || fileNameFromPath(f?.path), status: '' }))} />
-            )}
-
-            <div className="flex items-center gap-2">
-              <Btn variant="primary" onClick={submit} disabled={uploading}>{uploading? `업로드 중... ${progress}%` : '등록'}</Btn>
-              <div className="text-sm text-neutral-500">{(noticeFiles||[]).length>0 ? `${noticeFiles.length}개 파일 선택됨` : ''}</div>
-            </div>
-          </div>
-        </Card>
-      )}
 
       <Card title="공지 목록">
+        <div className="flex items-center justify-end mb-3">
+          {isAdmin && <Btn variant="primary" onClick={()=>setShowCompose(true)}>글쓰기</Btn>}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-neutral-600">
@@ -390,6 +374,38 @@ function NoticeBoard({store,isAdmin}){
           </table>
         </div>
       </Card>
+
+      {/* 공지 작성 모달 */}
+      {showCompose && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/40" onClick={()=>{ if(!uploading) setShowCompose(false); }} />
+          <div className="relative z-10 bg-white rounded-2xl shadow-xl max-w-[900px] w-[95%] max-h-[90vh] overflow-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold">공지 작성</h3>
+              <div className="text-sm"><button className="text-neutral-500" onClick={()=>{ if(!uploading) setShowCompose(false); }}>닫기</button></div>
+            </div>
+
+            <div className="space-y-3">
+              <Field label="제목"><Input value={title} onChange={e=>setTitle(e.target.value)} /></Field>
+              <Field label="내용"><Textarea rows={8} value={body} onChange={e=>setBody(e.target.value)} /></Field>
+
+              <div className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition" onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setNoticeFiles(prev=>[...prev,...dropped].slice(0,5));}}>
+                여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
+                <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]))} /></div>
+              </div>
+
+              {uploading && (
+                <LoadingModal open={true} text={`업로드 중…`} progress={progress} items={noticeFiles.map(f=>({ name: f?.name || fileNameFromPath(f?.path), status: '' }))} />
+              )}
+
+              <div className="flex items-center gap-2">
+                <Btn variant="primary" onClick={async()=>{ await submit(); setShowCompose(false); }} disabled={uploading}>{uploading? `업로드 중... ${progress}%` : '등록'}</Btn>
+                <div className="text-sm text-neutral-500">{(noticeFiles||[]).length>0 ? `${noticeFiles.length}개 파일 선택됨` : ''}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 공지 상세 모달 */}
       {selectedNotice && (
