@@ -405,9 +405,14 @@ function NoticeBoard({store,isAdmin}){
               <Field label="제목"><Input value={title} onChange={e=>setTitle(e.target.value)} /></Field>
               <Field label="내용"><Textarea rows={8} value={body} onChange={e=>setBody(e.target.value)} /></Field>
 
-              <div className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition" onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setNoticeFiles(prev=>[...prev,...dropped].slice(0,5));}}>
-                여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
-                <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]))} /></div>
+              <div
+                className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
+                onDragOver={e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect = 'copy'; }catch{} }}
+                onDragEnter={e=>{ e.preventDefault(); }}
+                onDrop={e=>{ e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setNoticeFiles(prev=>[...prev,...dropped].slice(0,10)); }}
+              >
+                여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 10개)
+                <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]).slice(0,10))} /></div>
               </div>
 
               {uploading && (
@@ -881,9 +886,14 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
 
           <Field label="내용"><Textarea rows={6} placeholder="내용을 입력하세요" value={note} onChange={e=>setNote(e.target.value)} /></Field>
 
-          <div className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition" onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,5));}}>
-            여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
-            <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]))} /></div>
+          <div
+            className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition"
+            onDragOver={e=>{ e.preventDefault(); try{ e.dataTransfer.dropEffect = 'copy'; }catch{} }}
+            onDragEnter={e=>{ e.preventDefault(); }}
+            onDrop={e=>{ e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setFiles(prev=>[...prev,...dropped].slice(0,10)); }}
+          >
+            여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 10개)
+            <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,10))} /></div>
           </div>
 
           {saving && (

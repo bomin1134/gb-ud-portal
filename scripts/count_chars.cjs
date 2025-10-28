@@ -1,0 +1,12 @@
+const fs = require('fs');
+const lines = fs.readFileSync('src/App.jsx','utf8').split('\n');
+const upTo = 429;
+const text = lines.slice(0, upTo).join('\n');
+const bt = (text.match(/`/g) || []).length;
+const opens = (text.match(/\(/g) || []).length;
+const closes = (text.match(/\)/g) || []).length;
+const lbr = (text.match(/\{/g) || []).length;
+const rbr = (text.match(/\}/g) || []).length;
+console.log('backticks up to 429:', bt);
+console.log('parens open vs close:', opens, closes);
+console.log('braces { vs }:', lbr, rbr);
