@@ -1,0 +1,20 @@
+{
+  "name": "경상북도 교통약자이동편의시설 기술지원센터",
+  "short_name": "GB-UD 포털",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/serohyeong.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/serohyeong.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
