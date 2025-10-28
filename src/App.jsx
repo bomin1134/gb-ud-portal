@@ -674,8 +674,8 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
 
   // Year / Month filters
   const years = useMemo(()=>{
-    const cy = (new Date()).getFullYear();
-    return [cy, cy-1, cy-2];
+    // fixed range 2020..2030 as requested
+    const arr=[]; for(let y=2020;y<=2030;y++) arr.push(y); return arr.reverse();
   },[]);
   const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
   const [selectedMonth,setSelectedMonth]=useState('all'); // 'all' or '1'..'12'
@@ -780,6 +780,37 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const [files,setFiles]=useState([]);
   const [saving,setSaving]=useState(false);
   const [progress,setProgress]=useState(0);
+  // hierarchical selects
+  const yearRange = useMemo(()=>{ const arr=[]; for(let y=2020;y<=2030;y++) arr.push(y); return arr.reverse(); },[]);
+  const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
+  const [selectedMonth,setSelectedMonth]=useState(String((new Date()).getMonth()+1));
+
+  // compute week options based on selected year/month
+  const weekOptions = useMemo(()=>{
+    const yr = Number(selectedYear||new Date().getFullYear());
+    let base = weeksForYear(yr);
+    if(selectedMonth && selectedMonth!=='all') base = base.filter(w=> w.start.getMonth()+1 === Number(selectedMonth));
+    return base;
+  },[selectedYear,selectedMonth]);
+
+  // initialize selections from initialWeekId or recent week
+  useEffect(()=>{
+    let wk = WEEKS.find(w=>w.id===initialWeekId) || WEEKS[0];
+    // if initialWeekId not found in recent WEEKS, try find in generated year weeks
+    if(initialWeekId && !wk){
+      const candYear = Number((initialWeekId||'').slice(0,4)) || (new Date()).getFullYear();
+      const candidate = weeksForYear(candYear).find(w=>w.id===initialWeekId);
+      if(candidate) wk = candidate;
+    }
+    if(wk){ setWeek(wk.id); setSelectedYear(String(wk.start.getFullYear())); setSelectedMonth(String(wk.start.getMonth()+1)); }
+  },[initialWeekId]);
+
+  // keep week in sync when weekOptions change: prefer current week if present else pick first
+  useEffect(()=>{
+    if(!weekOptions || weekOptions.length===0) return;
+    const exists = weekOptions.find(w=>w.id===week);
+    if(!exists){ setWeek(weekOptions[0].id); }
+  },[weekOptions]);
 
   useEffect(()=>{(async()=>{
     const rec=await store.getRecord(branch.id,week);
@@ -823,9 +854,18 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
       <Card title={`${branch.name} — 보고서 제출`}>
         <div className="space-y-5">
           <Field label="주차 선택">
-            <Select value={week} onChange={e=>setWeek(e.target.value)}>
-              {WEEKS.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
-            </Select>
+            <div className="flex items-center gap-3">
+              <div className="w-36"><Select value={selectedYear} onChange={e=>setSelectedYear(e.target.value)}>
+                {yearRange.map(y=> <option key={y} value={String(y)}>{y}년</option>)}
+              </Select></div>
+              <div className="w-28"><Select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)}>
+                <option value="all">전체 월</option>
+                {Array.from({length:12}).map((_,i)=> <option key={i+1} value={String(i+1)}>{i+1}월</option>)}
+              </Select></div>
+              <div className="flex-1"><Select value={week} onChange={e=>setWeek(e.target.value)}>
+                {weekOptions.map(w=> <option key={w.id} value={w.id}>{w.label}</option>)}
+              </Select></div>
+            </div>
           </Field>
 
           <Field label="제목"><Input placeholder="제목을 입력하세요" value={title} onChange={e=>setTitle(e.target.value)} /></Field>
