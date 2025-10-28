@@ -284,6 +284,7 @@ function NoticeBoard({store,isAdmin}){
   const [body,setBody]=useState("");
   const [noticeFiles,setNoticeFiles]=useState([]);
   const [uploading,setUploading]=useState(false);
+  const [progress,setProgress]=useState(0);
   const [previewOpen,setPreviewOpen]=useState(false);
   const [previewItem,setPreviewItem]=useState(null);
 
@@ -293,15 +294,26 @@ function NoticeBoard({store,isAdmin}){
   const submit=async()=>{
     if(!title.trim()||!body.trim()) return alert('제목/내용을 입력하세요');
     try{
-      setUploading(true);
-      // 업로드 파일이 있으면 별도 업로드 API를 호출
+      setUploading(true); setProgress(0);
+      // 업로드 파일이 있으면 개별 업로드로 진행률 표시
       let metas = [];
-      if((noticeFiles||[]).length>0){ metas = await store.uploadNoticeFiles(noticeFiles); }
+      const total = (noticeFiles||[]).length;
+      if(total>0){
+        let done = 0;
+        for(const f of noticeFiles){
+          const m = await store.uploadNoticeFiles([f]);
+          metas.push(...m);
+          done += 1;
+          const target = Math.round((done/total)*100);
+          let cur = progress;
+          while(cur < target){ cur += 1; setProgress(cur); await new Promise(r=>setTimeout(r,8)); }
+        }
+      }
       await store.createNotice(title.trim(), body.trim(), 'admin', metas);
       setTitle(""); setBody(""); setNoticeFiles([]);
       await load();
     }catch(e){ alert(e.message||'공지 저장 실패'); }
-    finally{ setUploading(false); }
+    finally{ setUploading(false); setProgress(0); }
   };
 
   const handleFileOpen = async (f) => {
@@ -333,9 +345,17 @@ function NoticeBoard({store,isAdmin}){
           <div className="space-y-3">
             <Field label="제목"><Input value={title} onChange={e=>setTitle(e.target.value)} /></Field>
             <Field label="내용"><Textarea rows={4} value={body} onChange={e=>setBody(e.target.value)} /></Field>
-            <Field label="첨부 파일"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]))} /></Field>
+            <div className="border-2 border-dashed rounded-xl p-6 bg-neutral-50 text-sm hover:bg-neutral-100 transition" onDragOver={e=>{e.preventDefault();}} onDrop={e=>{e.preventDefault(); const dropped=Array.from(e.dataTransfer.files||[]); setNoticeFiles(prev=>[...prev,...dropped].slice(0,5));}}>
+              여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 5개)
+              <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]))} /></div>
+            </div>
+
+            {uploading && (
+              <LoadingModal open={true} text={`업로드 중…`} progress={progress} items={noticeFiles.map(f=>({ name: f?.name || fileNameFromPath(f?.path), status: '' }))} />
+            )}
+
             <div className="flex items-center gap-2">
-              <Btn variant="primary" onClick={submit} disabled={uploading}>{uploading? '업로드 중…' : '등록'}</Btn>
+              <Btn variant="primary" onClick={submit} disabled={uploading}>{uploading? `업로드 중... ${progress}%` : '등록'}</Btn>
               <div className="text-sm text-neutral-500">{(noticeFiles||[]).length>0 ? `${noticeFiles.length}개 파일 선택됨` : ''}</div>
             </div>
           </div>
