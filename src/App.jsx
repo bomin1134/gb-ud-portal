@@ -654,13 +654,35 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
   const [rows,setRows]=useState([]);
   const [tab,setTab]=useState('list'); // 'list' | 'notice'
+
+  // Year / Month filters
+  const years = useMemo(()=>{
+    const ys = Array.from(new Set(WEEKS.map(w=> w.start.getFullYear()))).sort((a,b)=>b-a);
+    return ys;
+  },[]);
+  const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
+  const [selectedMonth,setSelectedMonth]=useState('all'); // 'all' or '1'..'12'
+
+  useEffect(()=>{
+    // initialize selectedYear to available year if current year not present
+    if(years.length && !years.includes(Number(selectedYear))){ setSelectedYear(String(years[0])); }
+  },[years]);
+
   useEffect(()=>{(async()=>{
-    // 속도개선: 주차 12개 데이터를 in() 한방으로
-    const weekIds=WEEKS.map(w=>w.id);
+    // Filter weeks by selected year/month
+    const filtered = WEEKS.filter(w=>{
+      const y = w.start.getFullYear();
+      const m = w.start.getMonth()+1;
+      if(selectedYear && selectedYear!=='all' && Number(selectedYear)!==y) return false;
+      if(selectedMonth && selectedMonth!=='all' && Number(selectedMonth)!==m) return false;
+      return true;
+    });
+    const weekIds = filtered.map(w=>w.id);
+    if(weekIds.length===0){ setRows([]); return; }
     const map = await store.getRecordsForBranchWeeks(branch.id, weekIds);
-    const arr=WEEKS.map(w=>({ week:w, rec: map.get(w.id)||{title:"",status:"NONE",note:"",files:[],submittedAt:null} }));
+    const arr = filtered.map(w=>({ week:w, rec: map.get(w.id)||{title:"",status:"NONE",note:"",files:[],submittedAt:null} }));
     setRows(arr);
-  })();},[store,branch.id,refreshKey]);
+  })();},[store,branch.id,refreshKey,selectedYear,selectedMonth]);
 
   return (
     <div className="space-y-6">
@@ -669,7 +691,24 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
           {isAdmin && <Btn onClick={onAdminBack} variant="soft">↩ 뒤로가기</Btn>}
           <h1 className="text-2xl font-extrabold text-neutral-900">{branch.name} — 제출현황</h1>
         </div>
-        {tab==='list' && <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>}
+        <div className="flex items-center gap-3">
+          {tab==='list' && <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="w-48">
+          <Select value={selectedYear} onChange={e=>setSelectedYear(e.target.value)}>
+            <option value="all">전체 연도</option>
+            {years.map(y=> <option key={y} value={String(y)}>{y}년</option>)}
+          </Select>
+        </div>
+        <div className="w-40">
+          <Select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)}>
+            <option value="all">전체 월</option>
+            {Array.from({length:12}).map((_,i)=> <option key={i+1} value={String(i+1)}>{i+1}월</option>)}
+          </Select>
+        </div>
       </div>
 
       <Tabs tabs={[{key:'list',label:'제출현황'},{key:'notice',label:'공지사항'}]} active={tab} onChange={setTab} />
