@@ -287,6 +287,7 @@ function NoticeBoard({store,isAdmin}){
   const [progress,setProgress]=useState(0);
   const [previewOpen,setPreviewOpen]=useState(false);
   const [previewItem,setPreviewItem]=useState(null);
+  const [selectedNotice,setSelectedNotice]=useState(null);
 
   const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
   useEffect(()=>{ load(); },[store]);
@@ -363,32 +364,63 @@ function NoticeBoard({store,isAdmin}){
       )}
 
       <Card title="공지 목록">
-          <ul className="divide-y divide-neutral-200">
-          {(items||[]).map(n=> {
-            const fileMetas = normalizeFilesField(n.files);
-            return (
-            <li key={n.id} className="py-3">
-              <div className="font-semibold text-neutral-900">{n.title}</div>
-              <div className="text-sm text-neutral-500">{new Date(n.created_at).toLocaleString()} · {n.author||'관리자'}</div>
-              <div className="mt-2 whitespace-pre-wrap leading-relaxed">{n.body}</div>
-              {fileMetas.length>0 && (
-                <div className="mt-2">
-                  <div className="text-sm font-semibold text-neutral-800 mb-1">첨부</div>
-                  <div className="flex flex-col gap-2">
-                    {fileMetas.map((f,i)=> (
-                      <div key={i} className="flex items-center gap-3">
-                        <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit" onClick={()=>handleFileOpen(f)}>📎 {f.name}</button>
-                        <button className="text-sm text-neutral-500" onClick={()=>handleFileOpen(f)}>열기 / 다운로드</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-neutral-600">
+              <tr>
+                <th className="px-4 py-2 w-12">번호</th>
+                <th className="px-4 py-2 text-left">제목</th>
+                <th className="px-4 py-2 w-40">작성자</th>
+                <th className="px-4 py-2 w-36">날짜</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-200">
+              {(items||[]).map((n, idx)=>(
+                <tr key={n.id} className="odd:bg-white even:bg-neutral-50 hover:bg-neutral-100 cursor-pointer" onClick={()=>setSelectedNotice(n)}>
+                  <td className="px-4 py-3 text-center text-neutral-700">{(items||[]).length - idx}</td>
+                  <td className="px-4 py-3 text-neutral-900">{n.title}</td>
+                  <td className="px-4 py-3 text-neutral-700">{n.author||'관리자'}</td>
+                  <td className="px-4 py-3 text-neutral-600">{new Date(n.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+              {(!items||items.length===0) && (
+                <tr><td colSpan={4} className="px-4 py-6 text-center text-neutral-500">등록된 공지가 없습니다.</td></tr>
               )}
-            </li>
-          )})}
-          {(!items||items.length===0)&&<li className="py-6 text-neutral-500">등록된 공지가 없습니다.</li>}
-        </ul>
+            </tbody>
+          </table>
+        </div>
       </Card>
+
+      {/* 공지 상세 모달 */}
+      {selectedNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/40" onClick={()=>setSelectedNotice(null)} />
+          <div className="relative z-10 bg-white rounded-2xl shadow-xl max-w-[900px] w-[95%] max-h-[90vh] overflow-auto p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-neutral-900">{selectedNotice.title}</h3>
+                <div className="text-sm text-neutral-500">{new Date(selectedNotice.created_at).toLocaleString()} · {selectedNotice.author||'관리자'}</div>
+              </div>
+              <div className="text-sm"><button className="text-neutral-500" onClick={()=>setSelectedNotice(null)}>닫기</button></div>
+            </div>
+            <div className="prose max-w-full whitespace-pre-wrap text-neutral-800 mb-4">{selectedNotice.body}</div>
+            {normalizeFilesField(selectedNotice.files).length>0 && (
+              <div>
+                <div className="text-sm font-semibold text-neutral-800 mb-2">첨부파일</div>
+                <div className="flex flex-col gap-2">
+                  {normalizeFilesField(selectedNotice.files).map((f,i)=> (
+                    <div key={i} className="flex items-center gap-3">
+                      <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-lg hover:bg-neutral-50 w-fit" onClick={()=>handleFileOpen(f)}>📎 {f.name}</button>
+                      <button className="text-sm text-neutral-500" onClick={()=>handleFileOpen(f)}>열기 / 다운로드</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <PreviewModal open={previewOpen} onClose={()=>{ try{ if(previewItem?.url && previewItem.url.startsWith('blob:')) URL.revokeObjectURL(previewItem.url); }catch(e){} setPreviewOpen(false); setPreviewItem(null); }} item={previewItem} />
     </div>
   );
