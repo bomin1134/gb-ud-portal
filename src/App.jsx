@@ -328,6 +328,29 @@ function NoticeBoard({store,isAdmin}){
   const onNoticeDragLeave = (e)=>{ e.preventDefault(); e.stopPropagation(); setNoticeDragOver(false); };
   const onNoticeDrop = (e)=>{ e.preventDefault(); e.stopPropagation(); setNoticeDragOver(false); const dropped = extractFilesFromEvent(e); if(dropped.length>0) setNoticeFiles(prev=>[...prev,...dropped].slice(0,10)); };
 
+  // preview a local File (create blob URL and open PreviewModal)
+  const previewLocalFile = (f)=>{
+    try{
+      if(!f) return;
+      // if already a path/meta, try to open via store
+      if(!(f instanceof File) && f.path){ handleFileOpen(f); return; }
+      const name = f.name || '파일';
+      const ext = (f.name||'').split('.').pop().toLowerCase();
+      const blobUrl = URL.createObjectURL(f);
+      if(['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext) || (f.type||'').startsWith('image/')){
+        setPreviewItem({ type:'image', url:blobUrl, name }); setPreviewOpen(true);
+      } else if(ext==='pdf' || (f.type||'').includes('pdf')){
+        setPreviewItem({ type:'pdf', url:blobUrl, name }); setPreviewOpen(true);
+      } else {
+        // trigger download for unknown types
+        const a=document.createElement('a'); a.href=blobUrl; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(blobUrl),5000);
+      }
+    }catch(e){ console.error(e); }
+  };
+
+  const removeNoticeFileAt = (index)=>{ setNoticeFiles(prev=>{ const n = [...prev]; n.splice(index,1); return n; }); };
+
   const load=async()=>{ const list=await store.listNotices(50); setItems(list); };
   useEffect(()=>{ load(); },[store]);
 
@@ -436,6 +459,26 @@ function NoticeBoard({store,isAdmin}){
                 여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 10개)
                 <div className="mt-3"><input type="file" multiple onChange={e=>setNoticeFiles(Array.from(e.target.files||[]).slice(0,10))} /></div>
               </div>
+
+              {noticeFiles && noticeFiles.length>0 && (
+                <div className="space-y-2 mt-3">
+                  <div className="text-sm font-semibold">선택된 파일</div>
+                  <div className="flex flex-col gap-2">
+                    {noticeFiles.map((f,i)=> (
+                      <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-md bg-white">
+                        <div className="flex items-center gap-3">
+                          <div className="text-neutral-700">📎</div>
+                          <div className="text-sm text-neutral-800 truncate max-w-[36rem]">{f.name || fileNameFromPath(f?.path)}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button className="text-sm text-neutral-600 hover:underline" onClick={()=>previewLocalFile(f)}>미리보기</button>
+                          <button className="text-sm text-red-600" onClick={()=>removeNoticeFileAt(i)}>삭제</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {uploading && (
                 <LoadingModal open={true} text={`업로드 중…`} progress={progress} items={noticeFiles.map(f=>({ name: f?.name || fileNameFromPath(f?.path), status: '' }))} />
@@ -812,6 +855,28 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
   const onSubmitDragOver = (e)=>{ e.preventDefault(); e.stopPropagation(); try{ e.dataTransfer.dropEffect='copy'; }catch{} setSubmitDragOver(true); };
   const onSubmitDragLeave = (e)=>{ e.preventDefault(); e.stopPropagation(); setSubmitDragOver(false); };
   const onSubmitDrop = (e)=>{ e.preventDefault(); e.stopPropagation(); setSubmitDragOver(false); const dropped = extractFilesFromEvent(e); if(dropped.length>0) setFiles(prev=>[...prev,...dropped].slice(0,10)); };
+
+  // preview / remove for submit form
+  const [submitPreviewOpen,setSubmitPreviewOpen]=useState(false);
+  const [submitPreviewItem,setSubmitPreviewItem]=useState(null);
+  const previewSubmitLocalFile = (f)=>{
+    try{
+      if(!f) return;
+      if(!(f instanceof File) && f.path){ handleFileOpen(f); return; }
+      const name = f.name || '파일';
+      const ext = (f.name||'').split('.').pop().toLowerCase();
+      const blobUrl = URL.createObjectURL(f);
+      if(['png','jpg','jpeg','gif','webp','bmp','svg'].includes(ext) || (f.type||'').startsWith('image/')){
+        setSubmitPreviewItem({ type:'image', url:blobUrl, name }); setSubmitPreviewOpen(true);
+      } else if(ext==='pdf' || (f.type||'').includes('pdf')){
+        setSubmitPreviewItem({ type:'pdf', url:blobUrl, name }); setSubmitPreviewOpen(true);
+      } else {
+        const a=document.createElement('a'); a.href=blobUrl; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(blobUrl),5000);
+      }
+    }catch(e){ console.error(e); }
+  };
+  const removeFileAt = (i)=> setFiles(prev=>{ const n=[...prev]; n.splice(i,1); return n; });
   // hierarchical selects
   const yearRange = useMemo(()=>{ const arr=[]; for(let y=2020;y<=2030;y++) arr.push(y); return arr.reverse(); },[]);
   const [selectedYear,setSelectedYear]=useState(String((new Date()).getFullYear()));
@@ -923,6 +988,26 @@ function BranchSubmit({branch,store,onBack,initialWeekId=null,onSuccess}){
             여기로 파일을 끌어다 놓거나 아래 버튼으로 선택하세요 (최대 10개)
             <div className="mt-3"><input type="file" multiple onChange={e=>setFiles(Array.from(e.target.files||[]).slice(0,10))} /></div>
           </div>
+
+          {files && files.length>0 && (
+            <div className="space-y-2 mt-3">
+              <div className="text-sm font-semibold">선택된 파일</div>
+              <div className="flex flex-col gap-2">
+                {files.map((f,i)=> (
+                  <div key={i} className="flex items-center justify-between gap-3 px-3 py-2 border rounded-md bg-white">
+                    <div className="flex items-center gap-3">
+                      <div className="text-neutral-700">📎</div>
+                      <div className="text-sm text-neutral-800 truncate max-w-[36rem]">{f.name || fileNameFromPath(f?.path)}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button className="text-sm text-neutral-600 hover:underline" onClick={()=>previewSubmitLocalFile(f)}>미리보기</button>
+                      <button className="text-sm text-red-600" onClick={()=>removeFileAt(i)}>삭제</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {saving && (
             <LoadingModal open={true} text={`업로드 중…`} progress={progress} items={files.map(f=>({ name: f?.name || fileNameFromPath(f?.path), status: '' }))} />
