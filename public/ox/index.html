@@ -313,10 +313,13 @@
   // 안전한 RLS 정책을 사용하세요. 기본 패스워드를 배포 전에 바꾸세요.
   const ADMIN_PASSWORD = '1111';
 
-  async function adminAuthAndShow(){
-    const pwd = prompt('관리자 비밀번호를 입력하세요');
-    if(!pwd) return;
-    if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+  // If skipPrompt is true, skip the password prompt (used when caller already validated admin)
+  async function adminAuthAndShow(skipPrompt = false){
+    if(!skipPrompt){
+      const pwd = prompt('관리자 비밀번호를 입력하세요');
+      if(!pwd) return;
+      if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+    }
     // Supabase 클라이언트가 준비되어 있는지 확인
     if(!supabase || typeof supabase.from !== 'function'){
       alert('Supabase 설정이 없습니다. 서버에 public/env.js를 배치하거나 배포 환경에 Supabase 키를 설정해 주세요.');
@@ -428,8 +431,9 @@
     try{
       const { data, error } = await supabase.rpc('reset_quiz_statistics', { p_quiz_id: quizId });
       if(error){ throw error; }
-      alert('통계가 초기화되었습니다. (RPC)');
-      adminAuthAndShow();
+  alert('통계가 초기화되었습니다. (RPC)');
+  // 이미 초기화 권한을 확인했으므로 패스워드 재입력을 건너뛰고 패널을 갱신합니다.
+  adminAuthAndShow(true);
       return;
     }catch(e){
       console.warn('RPC reset failed, falling back to client-side delete', e);
@@ -440,7 +444,8 @@
       const { error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
       if(error){ console.error('delete error', error); alert('초기화 실패: '+(error.message||JSON.stringify(error))); return; }
       alert('통계가 초기화되었습니다. (삭제 방식)');
-      adminAuthAndShow();
+      // 패널을 재로딩하되 패스워드 프롬프트는 생략
+      adminAuthAndShow(true);
     }catch(e){ console.error('reset error', e); alert('초기화 도중 오류가 발생했습니다. 서버 측에서 RPC(reset_quiz_statistics)를 만드는 것을 권장합니다.'); }
   }
 
