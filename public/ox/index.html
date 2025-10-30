@@ -319,6 +319,14 @@
       panel.scrollIntoView({behavior:'smooth'});
     }catch(e){ console.error(e); alert('오류'); }
   }
+
+  // Expose handlers to global scope so inline onclick attributes (in HTML) can call them.
+  // When using <script type="module">, top-level functions are module-scoped and
+  // not added to window — that prevents onclick="startQuiz()" from working.
+  window.startQuiz = startQuiz;
+  window.checkAnswer = checkAnswer;
+  window.nextQuestion = nextQuestion;
+  window.showStats = showStats;
 </script>
 <!-- 관리자 통계 패널 (초기 상태는 숨김) -->
 <div id="adminPanel" style="display:none; position:fixed; right:12px; bottom:12px; width:360px; max-width:90%; background:#fff; border:2px solid #2196f3; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.2); z-index:9999; font-family: sans-serif;">
