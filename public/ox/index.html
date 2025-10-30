@@ -291,6 +291,12 @@
     const pwd = prompt('관리자 비밀번호를 입력하세요');
     if(!pwd) return;
     if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+    // Supabase 클라이언트가 준비되어 있는지 확인
+    if(!supabase || typeof supabase.from !== 'function'){
+      alert('Supabase 설정이 없습니다. 서버에 public/env.js를 배치하거나 배포 환경에 Supabase 키를 설정해 주세요.');
+      console.warn('supabase not configured or invalid client', supabase);
+      return;
+    }
     // 가져오기: quiz_id에 해당하는 모든 응답을 불러와 클라이언트에서 집계
     try{
       const { data, error } = await supabase
