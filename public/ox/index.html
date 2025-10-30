@@ -429,11 +429,27 @@
 
     // 1) 우선 RPC 호출 시도
     try{
+      // show progress in admin panel if present
+      try{
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(RPC 호출)</div>';
+      }catch(e){/* ignore */}
       const { data, error } = await supabase.rpc('reset_quiz_statistics', { p_quiz_id: quizId });
-      if(error){ throw error; }
-  alert('통계가 초기화되었습니다. (RPC)');
-  // 이미 초기화 권한을 확인했으므로 패스워드 재입력을 건너뛰고 패널을 갱신합니다.
-  adminAuthAndShow(true);
+      if(error){
+        console.error('RPC reset error', error, data);
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">RPC 실패: '+(error.message||JSON.stringify(error))+'</div>';
+        alert('RPC로 초기화하는데 실패했습니다:\n'+(error.message||JSON.stringify(error))+'\n폴백으로 삭제를 시도합니다. 콘솔을 확인하세요.');
+        throw error;
+      }
+      console.log('RPC reset success', data);
+      // show success in panel
+      try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (RPC)</div>'; }catch(e){}
+      alert('통계가 초기화되었습니다. (RPC)');
+      // 이미 초기화 권한을 확인했으므로 패스워드 재입력을 건너뛰고 패널을 갱신합니다.
+      try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after reset error', e); }
       return;
     }catch(e){
       console.warn('RPC reset failed, falling back to client-side delete', e);
@@ -441,11 +457,26 @@
 
     // 2) RPC가 없으면 클라이언트에서 삭제 시도 (주의: RLS에 따라 실패할 수 있음)
     try{
-      const { error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
-      if(error){ console.error('delete error', error); alert('초기화 실패: '+(error.message||JSON.stringify(error))); return; }
+      try{
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(삭제 호출)</div>';
+      }catch(e){}
+      const { data, error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
+      if(error){
+        console.error('delete error', error, data);
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">삭제 실패: '+(error.message||JSON.stringify(error))+'</div>';
+        alert('초기화 실패: '+(error.message||JSON.stringify(error))+'\n브라우저 콘솔의 자세한 정보를 확인하세요.');
+        return;
+      }
+      console.log('delete success', data);
+      const deletedCount = Array.isArray(data) ? data.length : (data && data.count) ? data.count : '알 수 없음';
+      try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (삭제 방식) 삭제된 항목: '+deletedCount+'</div>'; }catch(e){}
       alert('통계가 초기화되었습니다. (삭제 방식)');
       // 패널을 재로딩하되 패스워드 프롬프트는 생략
-      adminAuthAndShow(true);
+      try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after delete error', e); }
     }catch(e){ console.error('reset error', e); alert('초기화 도중 오류가 발생했습니다. 서버 측에서 RPC(reset_quiz_statistics)를 만드는 것을 권장합니다.'); }
   }
 
