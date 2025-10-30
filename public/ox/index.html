@@ -346,10 +346,19 @@
       // overall summary (take from first row if exists)
       let totalParticipants = 0;
       let avgScore = null;
+      let totalResponses = 0; // estimate of total row responses
       if(Array.isArray(data) && data.length>0){
         // RPC may return per-question rows with totals and optionally an overall total_participants / avg_score
         totalParticipants = data[0].total_participants || 0;
         avgScore = (typeof data[0].avg_score !== 'undefined') ? data[0].avg_score : null;
+        // If RPC provides total_responses per question, we can estimate total responses. Otherwise estimate responses = participants * questions.length
+        if(typeof data[0].total_responses !== 'undefined'){
+          // total_responses in each row counts responses for that question; to estimate total rows, sum per-question and divide by questions.length
+          const sumPerQuestion = data.reduce((s,r)=> s + (Number(r.total_responses)||0), 0);
+          totalResponses = Math.round(sumPerQuestion / Math.max(1, questions.length));
+        }else{
+          totalResponses = totalParticipants ? (totalParticipants * questions.length) : 0;
+        }
       }
 
       // Normalize RPC avgScore into a percentage (0..100). RPC may return:
@@ -369,7 +378,7 @@
       }
       const avgScoreDisplay = (typeof avgPercentFromRpc === 'number') ? avgPercentFromRpc.toFixed(2) : '0.00';
       let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
         <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
         <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
 
@@ -405,8 +414,9 @@
           else agg[qi].X++;
           agg[qi].total++;
 
-          // key per session; if missing, create a unique per-row key so each becomes a participant
-          const sessionKey = r.session_id || `anon_row_${i}`;
+          // Treat each response row as its own participant (counts increase even for same browser)
+          // Use a per-row key so every row contributes to participant count.
+          const sessionKey = `row_${i}`;
           const correct = (ans === 'O' || ans === 'TRUE' || ans === 'T') ? 1 : 0;
           perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + correct;
         }
@@ -419,8 +429,11 @@
         const avgScorePercent = (totalParticipants > 0 && questions.length > 0) ? (totalCorrectSum / (totalParticipants * questions.length)) * 100 : 0;
         const avgScoreDisplay = avgScorePercent.toFixed(2);
 
+        // total responses is simply the number of rows fetched
+        const totalResponses = Array.isArray(data) ? data.length : 0;
+
         let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
           <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
           <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
         for(let i=0;i<questions.length;i++){
