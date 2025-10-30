@@ -271,7 +271,8 @@
     const correct = questions[current].answer;
     if (userAnswer) stats[current].o++;
     else stats[current].x++;
-    if (userAnswer === correct || current === 4) score++;
+    // Count a correct answer only when it matches the correct value.
+    if (userAnswer === correct) score++;
 
     document.getElementById("quiz").style.display = "none";
     document.getElementById("explanationBox").style.display = "flex";
@@ -347,9 +348,11 @@
         avgScore = data[0].avg_score || 0;
       }
 
+      // Normalize avgScore to a displayable percentage (RPC may return percent already).
+      const avgScoreDisplay = (typeof avgScore !== 'undefined' && avgScore !== null) ? Number(avgScore).toFixed(2) : '0.00';
       let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
         <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
-        <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScore}</div>
+        <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScoreDisplay} 점</div>
         <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
 
       // Ensure we render rows for each question index in order
@@ -387,11 +390,15 @@
           if(r.session_id){ sessions.add(r.session_id); perSessionScore[r.session_id] = (perSessionScore[r.session_id]||0) + ((ans==='O'||ans==='TRUE'||ans==='T')?1:0); }
         }
         const totalParticipants = sessions.size;
-        const avgScore = Object.keys(perSessionScore).length>0 ? (Object.values(perSessionScore).reduce((a,b)=>a+b,0)/Object.keys(perSessionScore).length).toFixed(2) : 0;
+        // avgScore as average correct answers per session (0..questions.length)
+        const avgCorrect = Object.keys(perSessionScore).length>0 ? (Object.values(perSessionScore).reduce((a,b)=>a+b,0)/Object.keys(perSessionScore).length) : 0;
+        // Convert to percentage so it matches RPC-style percent (0..100)
+        const avgScorePercent = (questions.length > 0) ? (avgCorrect / questions.length) * 100 : 0;
+        const avgScoreDisplay = avgScorePercent.toFixed(2);
 
         let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
           <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
-          <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScore}</div>
+          <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScoreDisplay} 점</div>
           <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
         for(let i=0;i<questions.length;i++){
           const a = agg[i] || {O:0,X:0,total:0};
@@ -444,6 +451,9 @@
   window.checkAnswer = checkAnswer;
   window.nextQuestion = nextQuestion;
   window.showStats = showStats;
+  // expose admin handlers used by inline onclick attributes
+  window.resetStatistics = resetStatistics;
+  window.adminAuthAndShow = adminAuthAndShow;
   // Expose supabase to window for debugging (will be undefined if not configured)
   try{ window.supabase = supabase; }catch(e){/* ignore */}
 
