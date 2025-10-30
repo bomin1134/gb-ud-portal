@@ -161,16 +161,36 @@
   <!-- 통계 버튼은 표지에 이동됨 -->
 </div>
 
-<!-- Load runtime env (if provided at /env.js) so window.__env is available to the module below -->
-<script src="/env.js"></script>
+<!-- Load runtime env: try absolute /env.js first, then relative env.js (supports hosting under / or /ox/). -->
 <script>
-  // Backward-compat: some older code or console tests may reference `_env`.
-  // Ensure `_env` aliases `window.__env` if present to avoid ReferenceError in the console.
-  try{
-    if(typeof window !== 'undefined' && typeof window.__env !== 'undefined' && typeof window._env === 'undefined'){
-      window._env = window.__env;
+  (function(){
+    function loadScript(src){
+      return new Promise(function(resolve){
+        try{
+          var s = document.createElement('script');
+          s.src = src; s.async = true;
+          s.onload = function(){ resolve(true); };
+          s.onerror = function(){ resolve(false); };
+          document.head.appendChild(s);
+        }catch(e){ resolve(false); }
+      });
     }
-  }catch(e){/* ignore in restricted environments */}
+
+    // Try root then page-relative
+    loadScript('/env.js').then(function(ok){
+      if(!ok){ return loadScript('env.js'); }
+      return ok;
+    }).finally(function(){
+      // Backward-compat: alias _env to __env if present
+      try{
+        if(typeof window !== 'undefined' && typeof window.__env !== 'undefined' && typeof window._env === 'undefined'){
+          window._env = window.__env;
+        }
+      }catch(e){/* ignore */}
+      // optional flag for debugging
+      try{ window.__env_loaded = !!(window.__env); }catch(e){}
+    });
+  })();
 </script>
 <script type="module">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
