@@ -259,10 +259,12 @@
   let current = 0;
   let score = 0;
   let stats = questions.map(() => ({ o: 0, x: 0 }));
-
-  // session id 생성/재사용 (익명 참여 식별용)
+  // persistent session id (optional) and per-attempt submission id
   let sessionId = localStorage.getItem('ox_session_id');
   if(!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem('ox_session_id', sessionId); }
+  // submissionId is generated each time the quiz is started so each attempt
+  // counts as a separate participant. It is kept in-memory (not persisted).
+  let submissionId = null;
 
   // quiz id from querystring (QR에 quiz 파라미터 포함하세요)
   const params = new URLSearchParams(location.search);
@@ -275,6 +277,7 @@
         question_index: qIndex,
         answer: ans,
         session_id: sessionId,
+        submission_id: submissionId,
         user_agent: navigator.userAgent,
         meta: { via: 'qr' }
       };
@@ -284,6 +287,9 @@
   }
 
   function startQuiz() {
+    // create a new submission id for this quiz attempt so repeated attempts
+    // from the same browser are treated as distinct participants.
+    try{ submissionId = crypto.randomUUID(); }catch(e){ submissionId = 's_'+Date.now(); }
     document.getElementById("intro").style.display = "none";
     document.getElementById("quiz").style.display = "flex";
     loadQuestion();
@@ -398,7 +404,7 @@
       // This ensures average = participant-score-sum / participant-count.
       let avgScoreDisplay = '0.00';
       try{
-        const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id').eq('quiz_id', quizId).limit(100000);
+  const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id,submission_id').eq('quiz_id', quizId).limit(100000);
         if(!rowsErr && Array.isArray(rows)){
           totalResponses = rows.length;
           // Group rows by session_id when available so a single participant's
@@ -415,7 +421,7 @@
             if(isCorrect) totalCorrectSum++;
             if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCorrect.length && isCorrect) perQuestionCorrect[qi]++;
 
-            const sid = r.session_id || `row_${i}`;
+            const sid = r.submission_id || r.session_id || `row_${i}`;
             sessions.set(sid, (sessions.get(sid) || 0) + isCorrect);
           }
           const participantCount = sessions.size;
@@ -431,8 +437,11 @@
           }catch(e){/* ignore */}
         }
       }catch(e){ console.warn('failed to fetch rows for avg calc', e); }
-      // Choose displayParticipants: prefer totalResponses so same-browser repeated submissions increase the shown count
-      const displayParticipants = (totalResponses && totalResponses > 0) ? totalResponses : totalParticipants;
+  // Choose displayParticipants: prefer computed participant count (from submission_id grouping)
+  // If the per-attempt participant count was computed and stored on the panel, use it.
+  const panelEl = document.getElementById('adminPanel');
+  const computedParticipantCount = panelEl && (typeof panelEl._participantCount === 'number') ? panelEl._participantCount : null;
+  const displayParticipants = (computedParticipantCount !== null) ? computedParticipantCount : (totalParticipants && totalParticipants > 0 ? totalParticipants : totalResponses);
       let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
         <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
         <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
@@ -488,7 +497,7 @@
           // Group by session_id if present so a single participant's answers
           // across multiple questions count as one participant rather than
           // being counted once per question.
-          const sessionKey = r.session_id || `row_${i}`;
+          const sessionKey = r.submission_id || r.session_id || `row_${i}`;
           perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + isCorrect;
         }
 
