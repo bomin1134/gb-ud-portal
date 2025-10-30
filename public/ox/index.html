@@ -300,7 +300,9 @@
   function showFinal() {
     document.getElementById("explanationBox").style.display = "none";
     document.getElementById("finalScreen").style.display = "flex";
-    document.getElementById("finalResult").textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다!`;
+    // Show both raw correct count and percent score (정답수/문항수 * 100)
+    const percent = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+    document.getElementById("finalResult").textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`;
   }
 
   function showStats() {
@@ -343,42 +345,45 @@
       const contentEl = panel.querySelector('.content');
       if(!contentEl){ throw new Error('panel .content element missing'); }
 
-      // overall summary (take from first row if exists)
+      // We'll use the RPC data for per-question counts, but compute the overall average
+      // from raw rows to ensure average = (sum of participant scores) / participant count.
+      // First derive per-question totals from RPC rows if present.
       let totalParticipants = 0;
-      let avgScore = null;
-      let totalResponses = 0; // estimate of total row responses
+      let totalResponses = 0;
       if(Array.isArray(data) && data.length>0){
-        // RPC may return per-question rows with totals and optionally an overall total_participants / avg_score
         totalParticipants = data[0].total_participants || 0;
-        avgScore = (typeof data[0].avg_score !== 'undefined') ? data[0].avg_score : null;
-        // If RPC provides total_responses per question, we can estimate total responses. Otherwise estimate responses = participants * questions.length
         if(typeof data[0].total_responses !== 'undefined'){
-          // total_responses in each row counts responses for that question; to estimate total rows, sum per-question and divide by questions.length
           const sumPerQuestion = data.reduce((s,r)=> s + (Number(r.total_responses)||0), 0);
           totalResponses = Math.round(sumPerQuestion / Math.max(1, questions.length));
-        }else{
-          totalResponses = totalParticipants ? (totalParticipants * questions.length) : 0;
         }
       }
 
-      // Normalize RPC avgScore into a percentage (0..100). RPC may return:
-      // - a fraction (0..1)
-      // - an average correct count (0..questions.length)
-      // - already a percent (0..100)
-      let avgPercentFromRpc = 0;
-      if(avgScore !== null){
-        const n = Number(avgScore);
-        if(n <= 1){
-          avgPercentFromRpc = n * 100; // fraction -> percent
-        }else if(n > 1 && n <= questions.length){
-          avgPercentFromRpc = (n / questions.length) * 100; // correct-count -> percent
-        }else{
-          avgPercentFromRpc = n; // assume already percent
+      // Fetch raw rows to compute per-row participant scores (treat each response-row as a participant)
+      // This ensures average = participant-score-sum / participant-count.
+      let avgScoreDisplay = '0.00';
+      try{
+        const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index').eq('quiz_id', quizId).limit(100000);
+        if(!rowsErr && Array.isArray(rows)){
+          totalResponses = rows.length;
+          // treat each row as a participant (per user's preference)
+          const participantCount = rows.length;
+          // For each row, determine if the answer was correct according to questions[question_index]
+          let totalCorrectSum = 0;
+          for(const [i, r] of rows.entries()){
+            const qi = Number(r.question_index);
+            const ans = String(r.answer).toUpperCase();
+            const correctBool = !!(questions[qi] && questions[qi].answer);
+            const isCorrect = (ans === 'O' || ans === 'TRUE' || ans === 'T') === correctBool;
+            if(isCorrect) totalCorrectSum++;
+          }
+          const avgPercent = (participantCount > 0 && questions.length > 0) ? (totalCorrectSum / (participantCount * questions.length)) * 100 : 0;
+          avgScoreDisplay = avgPercent.toFixed(2);
         }
-      }
-      const avgScoreDisplay = (typeof avgPercentFromRpc === 'number') ? avgPercentFromRpc.toFixed(2) : '0.00';
+      }catch(e){ console.warn('failed to fetch rows for avg calc', e); }
+      // Choose displayParticipants: prefer totalResponses so same-browser repeated submissions increase the shown count
+      const displayParticipants = (totalResponses && totalResponses > 0) ? totalResponses : totalParticipants;
       let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
+        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
         <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
         <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
 
@@ -407,18 +412,23 @@
         // Build per-session scores. If a row lacks session_id, treat that row as its own participant
         const perSessionScore = {};
         for(const [i, r] of (data || []).entries()){
-          const qi = r.question_index;
+          const qi = Number(r.question_index);
           const ans = String(r.answer).toUpperCase();
-          if(!agg[qi]) agg[qi] = { O:0, X:0, total:0 };
+          if(!agg[qi]) agg[qi] = { O:0, X:0, total:0, correctCount:0 };
           if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
           else agg[qi].X++;
           agg[qi].total++;
 
+          // Determine whether this response was correct by comparing to the
+          // authoritative answer in the `questions` array. This fixes a bug
+          // where selecting 'O' was always treated as correct.
+          const correctAnswerIsO = !!(questions[qi] && questions[qi].answer);
+          const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0;
+          agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;
+
           // Treat each response row as its own participant (counts increase even for same browser)
-          // Use a per-row key so every row contributes to participant count.
           const sessionKey = `row_${i}`;
-          const correct = (ans === 'O' || ans === 'TRUE' || ans === 'T') ? 1 : 0;
-          perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + correct;
+          perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + isCorrect;
         }
 
         const participantIds = Object.keys(perSessionScore);
@@ -437,8 +447,13 @@
           <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
           <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
         for(let i=0;i<questions.length;i++){
-          const a = agg[i] || {O:0,X:0,total:0};
-          const correctRate = a.total? ((a.O / a.total)*100).toFixed(2) : '0.00';
+          const a = agg[i] || {O:0,X:0,total:0,correctCount:0};
+          // Use the counted correct responses if available. If not, fall back
+          // to interpreting O/X relative to the known correct answer.
+          const correctCount = (typeof a.correctCount !== 'undefined' && a.correctCount !== null)
+            ? a.correctCount
+            : (questions[i] && questions[i].answer ? a.O : a.X);
+          const correctRate = a.total ? ((correctCount / a.total) * 100).toFixed(2) : '0.00';
           html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
         }
         html += `</div>`;
