@@ -341,6 +341,27 @@
   window.checkAnswer = checkAnswer;
   window.nextQuestion = nextQuestion;
   window.showStats = showStats;
+  // Expose supabase to window for debugging (will be undefined if not configured)
+  try{ window.supabase = supabase; }catch(e){/* ignore */}
+
+  // Ensure adminPanel .content exists (defensive) once DOM is ready
+  document.addEventListener('DOMContentLoaded', ()=>{
+    const panel = document.getElementById('adminPanel');
+    if(panel){
+      let content = panel.querySelector('.content');
+      if(!content){
+        content = document.createElement('div');
+        content.className = 'content';
+        content.style.padding = '8px 12px';
+        content.style.fontSize = '13px';
+        content.style.color = '#111';
+        content.textContent = '로딩 중...';
+        // insert before the footer buttons if present
+        const footer = panel.querySelector('div[style*="border-top"]');
+        panel.insertBefore(content, footer || null);
+      }
+    }
+  });
 </script>
 <!-- 관리자 통계 패널 (초기 상태는 숨김) -->
 <div id="adminPanel" style="display:none; position:fixed; right:12px; bottom:12px; width:360px; max-width:90%; background:#fff; border:2px solid #2196f3; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.2); z-index:9999; font-family: sans-serif;">
