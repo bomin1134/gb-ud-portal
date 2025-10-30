@@ -345,17 +345,32 @@
 
       // overall summary (take from first row if exists)
       let totalParticipants = 0;
-      let avgScore = 0;
+      let avgScore = null;
       if(Array.isArray(data) && data.length>0){
+        // RPC may return per-question rows with totals and optionally an overall total_participants / avg_score
         totalParticipants = data[0].total_participants || 0;
-        avgScore = data[0].avg_score || 0;
+        avgScore = (typeof data[0].avg_score !== 'undefined') ? data[0].avg_score : null;
       }
 
-      // Normalize avgScore to a displayable percentage (RPC may return percent already).
-      const avgScoreDisplay = (typeof avgScore !== 'undefined' && avgScore !== null) ? Number(avgScore).toFixed(2) : '0.00';
+      // Normalize RPC avgScore into a percentage (0..100). RPC may return:
+      // - a fraction (0..1)
+      // - an average correct count (0..questions.length)
+      // - already a percent (0..100)
+      let avgPercentFromRpc = 0;
+      if(avgScore !== null){
+        const n = Number(avgScore);
+        if(n <= 1){
+          avgPercentFromRpc = n * 100; // fraction -> percent
+        }else if(n > 1 && n <= questions.length){
+          avgPercentFromRpc = (n / questions.length) * 100; // correct-count -> percent
+        }else{
+          avgPercentFromRpc = n; // assume already percent
+        }
+      }
+      const avgScoreDisplay = (typeof avgPercentFromRpc === 'number') ? avgPercentFromRpc.toFixed(2) : '0.00';
       let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
         <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
-        <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScoreDisplay} 점</div>
+        <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
         <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
 
       // Ensure we render rows for each question index in order
@@ -380,9 +395,9 @@
         const { data, error } = await supabase.from('quiz_responses').select('*').eq('quiz_id', quizId).limit(100000);
         if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
         const agg = {};
-        const sessions = new Set();
+        // Build per-session scores. If a row lacks session_id, treat that row as its own participant
         const perSessionScore = {};
-        for(const r of data){
+        for(const [i, r] of (data || []).entries()){
           const qi = r.question_index;
           const ans = String(r.answer).toUpperCase();
           if(!agg[qi]) agg[qi] = { O:0, X:0, total:0 };
@@ -390,18 +405,23 @@
           else agg[qi].X++;
           agg[qi].total++;
 
-          if(r.session_id){ sessions.add(r.session_id); perSessionScore[r.session_id] = (perSessionScore[r.session_id]||0) + ((ans==='O'||ans==='TRUE'||ans==='T')?1:0); }
+          // key per session; if missing, create a unique per-row key so each becomes a participant
+          const sessionKey = r.session_id || `anon_row_${i}`;
+          const correct = (ans === 'O' || ans === 'TRUE' || ans === 'T') ? 1 : 0;
+          perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + correct;
         }
-        const totalParticipants = sessions.size;
-        // avgScore as average correct answers per session (0..questions.length)
-        const avgCorrect = Object.keys(perSessionScore).length>0 ? (Object.values(perSessionScore).reduce((a,b)=>a+b,0)/Object.keys(perSessionScore).length) : 0;
-        // Convert to percentage so it matches RPC-style percent (0..100)
-        const avgScorePercent = (questions.length > 0) ? (avgCorrect / questions.length) * 100 : 0;
+
+        const participantIds = Object.keys(perSessionScore);
+        const totalParticipants = participantIds.length;
+        // sum of correct answers across participants
+        const totalCorrectSum = participantIds.length > 0 ? participantIds.reduce((acc, id) => acc + (perSessionScore[id]||0), 0) : 0;
+        // Average percent = (total correct across participants) / (participants * questions.length) * 100
+        const avgScorePercent = (totalParticipants > 0 && questions.length > 0) ? (totalCorrectSum / (totalParticipants * questions.length)) * 100 : 0;
         const avgScoreDisplay = avgScorePercent.toFixed(2);
 
         let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
           <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
-          <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScoreDisplay} 점</div>
+          <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
           <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
         for(let i=0;i<questions.length;i++){
           const a = agg[i] || {O:0,X:0,total:0};
