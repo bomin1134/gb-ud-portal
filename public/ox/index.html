@@ -121,6 +121,8 @@
   <img alt="가로형 이미지" src="garohyeong.png" style="width: 500px; margin-bottom: 20px;"/>
   <img alt="인트로 퀴즈" src="퀴즈.png" style="width: 850px; margin-bottom: 20px; margin-top: -10px;"/>
   <button class="btn next" onclick="startQuiz()">시작</button>
+  <!-- 통계 버튼: 표지 우측 하단에 표시 -->
+  <button class="btn stats" onclick="showStats()" style="position:absolute; right:16px; bottom:16px; width:auto; height:auto; padding:8px 12px; font-size:20px; border-radius:6px;">📊 통계 보기</button>
 </div>
 
 <div class="quiz-box" id="quiz" style="display:none">
@@ -156,7 +158,7 @@
   <p style="font-size: 50px; font-weight: bold; color: #2196f3;">경상북도 이동편의시설 기술지원센터는</p>
   <p style="font-size: 50px; font-weight: bold; color: #2196f3;">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
   <button class="btn reset" onclick="location.reload()">🔄 처음으로</button>
-  <button class="btn stats" onclick="showStats()">📊 통계 보기</button>
+  <!-- 통계 버튼은 표지에 이동됨 -->
 </div>
 
 <script type="module">
@@ -283,7 +285,7 @@
   // --- Admin UI & Stats -------------------------------------------------
   // 간단한 패스워드 기반 보호: 실제 운영에서는 서버 측 인증 또는
   // 안전한 RLS 정책을 사용하세요. 기본 패스워드를 배포 전에 바꾸세요.
-  const ADMIN_PASSWORD = 'please-change-me';
+  const ADMIN_PASSWORD = '1111';
 
   async function adminAuthAndShow(){
     const pwd = prompt('관리자 비밀번호를 입력하세요');
@@ -296,7 +298,7 @@
         .select('*')
         .eq('quiz_id', quizId)
         .limit(10000);
-      if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다'); return; }
+      if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
       const agg = {};
       for(const r of data){
         const qi = r.question_index;
@@ -314,9 +316,21 @@
       }
       html += `</div>`;
       const panel = document.getElementById('adminPanel');
-      panel.querySelector('.content').innerHTML = html;
-      panel.style.display = 'block';
-      panel.scrollIntoView({behavior:'smooth'});
+      if(!panel){
+        console.error('adminPanel element not found');
+        alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.');
+        return;
+      }
+      try{
+        const contentEl = panel.querySelector('.content');
+        if(!contentEl){ throw new Error('panel .content element missing'); }
+        contentEl.innerHTML = html;
+        panel.style.display = 'block';
+        panel.scrollIntoView({behavior:'smooth'});
+      }catch(e){
+        console.error('rendering admin panel failed', e);
+        alert('관리자 패널 렌더링 중 오류가 발생했습니다: '+(e.message||e));
+      }
     }catch(e){ console.error(e); alert('오류'); }
   }
 
