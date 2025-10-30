@@ -177,11 +177,25 @@
   } else {
     console.warn('Supabase keys not found. Create public/env.js with window.__env = { SUPABASE_URL, SUPABASE_ANON_KEY }');
     // Minimal stub to avoid runtime errors when supabase isn't configured.
+    // The real supabase client returns a chainable query builder for .select(...).eq(...).limit(...)
+    // so provide a compatible stub that supports common chained calls used by this page.
     supabase = {
       from: function() {
         return {
+          // insert is awaited directly in submitAnswer -> keep as async
           insert: async function() { return { error: 'supabase-not-configured' }; },
-          select: async function() { return { data: [], error: 'supabase-not-configured' }; }
+          // select returns a chainable builder: select(...).eq(...).limit(...)
+          select: function() {
+            const result = { data: [], error: 'supabase-not-configured' };
+            const builder = {
+              eq: function() { return builder; },
+              limit: async function() { return result; },
+              order: function() { return builder; },
+              // allow then/await patterns if someone awaits select() directly
+              then: function(resolve) { return Promise.resolve(result).then(resolve); }
+            };
+            return builder;
+          }
         }
       }
     };
