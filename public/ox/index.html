@@ -161,6 +161,17 @@
   <!-- 통계 버튼은 표지에 이동됨 -->
 </div>
 
+<!-- Load runtime env (if provided at /env.js) so window.__env is available to the module below -->
+<script src="/env.js"></script>
+<script>
+  // Backward-compat: some older code or console tests may reference `_env`.
+  // Ensure `_env` aliases `window.__env` if present to avoid ReferenceError in the console.
+  try{
+    if(typeof window !== 'undefined' && typeof window.__env !== 'undefined' && typeof window._env === 'undefined'){
+      window._env = window.__env;
+    }
+  }catch(e){/* ignore in restricted environments */}
+</script>
 <script type="module">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
