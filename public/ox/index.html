@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<title>OX 퀴즈</title>
+<style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: 'Malgun Gothic', sans-serif;
+      background-image: url('색.png');
+      background-size: cover;
+    }
+    .quiz-box {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 80vh;
+      text-align: center;
+      position: relative;
+      border: 8px solid #2196f3;
+      background-color: white;
+      border-radius: 20px;
+      box-sizing: border-box;
+      padding: 20px;
+      max-width: 90%;
+      margin: 5vh auto;
+    }
+    .question {
+      max-width: 800px;
+      width: 100%;
+      word-break: keep-all;
+      transform: translateY(30px);
+    }
+    .answer-buttons {
+      display: flex;
+      justify-content: space-evenly;
+      gap: 50px;
+      width: 100%;
+      padding: 0 10px;
+      margin-top: 60px;
+      margin-bottom: 60px;
+      box-sizing: border-box;
+      transform: translateY(30px);
+    }
+    .btn {
+      width: 67.5vw;
+      height: 67.5vw;
+      max-width: 262.5px;
+      max-height: 262.5px;
+      font-size: 12vw;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    }
+    .btn.o, .btn.x {
+      background-color: transparent;
+      padding: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .btn.o img, .btn.x img {
+      width: 350px;
+      height: 350px;
+      object-fit: contain;
+      max-width: 40vw;
+    }
+    .btn.next, .btn.stats, .btn.reset {
+      font-size: 35px;
+      padding: 4px 8px;
+      background-color: #607d8b;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      height: 88px;
+      line-height: 1.2;
+      margin-top: 20px;
+    }
+    .judgement.correct {
+      color: #2196f3;
+      font-size: 68px;
+      font-weight: bold;
+    }
+    .judgement.wrong {
+      color: #ff9800;
+      font-size: 68px;
+      font-weight: bold;
+    }
+    #finalScreen img {
+      width: 507px;
+      margin-bottom: 20px;
+    }
+    .bottom-img {
+      width: 60%;
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+.topright-logo {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  height: 72px;
+}
+</style>
+</head>
+<body>
+<div class="quiz-box" id="intro">
+  <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+  <img alt="가로형 이미지" src="garohyeong.png" style="width: 500px; margin-bottom: 20px;"/>
+  <img alt="인트로 퀴즈" src="퀴즈.png" style="width: 850px; margin-bottom: 20px; margin-top: -10px;"/>
+  <button class="btn next" onclick="startQuiz()">시작</button>
+</div>
+
+<div class="quiz-box" id="quiz" style="display:none">
+  <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+  <div style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%);">
+    <img id="questionImage" src="11번.png" style="width: 650px; display: block;"/>
+    <div id="quizLabel" style="position: absolute; top: 30%; left: 50%; transform: translateX(-50%); color: #0a2c5d; font-family: 'Arial Black', 'Malgun Gothic', sans-serif; font-weight: 999; font-size: 80px; pointer-events: none; z-index: 2;">#QUIZ 1</div>
+  </div>
+  <div class="question" id="question" style="font-size: 52px; font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+  <div class="answer-buttons">
+    <button class="btn o" onclick="checkAnswer(true)"><img alt="O" src="o.png"/></button>
+    <button class="btn x" onclick="checkAnswer(false)"><img alt="X" src="x.png"/></button>
+  </div>
+  <img class="bottom-img" src="garohyeong.png"/>
+</div>
+
+<div class="quiz-box" id="explanationBox" style="display:none; position: relative;">
+  <div style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%);">
+    <img src="11번.png" style="width: 650px; display: block;" alt="해설 배경 이미지"/>
+    <div style="position: absolute; top: 35%; left: 50%; transform: translateX(-50%); color: #0a2c5d; font-family: 'Arial Black', 'Malgun Gothic', sans-serif; font-weight: 700; font-size: 75px; pointer-events: none; z-index: 2;">문제 해설</div>
+  </div>
+  <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+  <div id="judgement"></div>
+  <div class="explanation" id="explanationText" style="font-size: 50px; font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+  <button class="btn next" onclick="nextQuestion()">다음</button>
+  <img class="bottom-img" src="garohyeong.png"/>
+</div>
+
+<div class="quiz-box" id="finalScreen" style="display:none">
+  <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+  <img alt="마무리 이미지" src="serohyeong.png"/>
+  <div class="explanation" id="finalResult" style="font-size: 68px; font-weight: bold;"></div>
+  <p style="font-size: 50px; font-weight: bold; color: #2196f3;">경상북도 이동편의시설 기술지원센터는</p>
+  <p style="font-size: 50px; font-weight: bold; color: #2196f3;">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
+  <button class="btn reset" onclick="location.reload()">🔄 처음으로</button>
+  <button class="btn stats" onclick="showStats()">📊 통계 보기</button>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+  // Runtime 환경변수(권장): public/env.js 에서 window.__env 객체를 설정하세요.
+  // 예: public/env.js
+  // window.__env = { SUPABASE_URL: 'https://xyz.supabase.co', SUPABASE_ANON_KEY: 'anon-xxx' }
+  // 저장소에는 실제 키를 커밋하지 마시고, 배포 서버에서만 제공하세요.
+  const SUPABASE_URL = (window.__env && window.__env.SUPABASE_URL) || null;
+  const SUPABASE_ANON_KEY = (window.__env && window.__env.SUPABASE_ANON_KEY) || null;
+
+  let supabase;
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } else {
+    console.warn('Supabase keys not found. Create public/env.js with window.__env = { SUPABASE_URL, SUPABASE_ANON_KEY }');
+    // Minimal stub to avoid runtime errors when supabase isn't configured.
+    supabase = {
+      from: function() {
+        return {
+          insert: async function() { return { error: 'supabase-not-configured' }; },
+          select: async function() { return { data: [], error: 'supabase-not-configured' }; }
+        }
+      }
+    };
+  }
+
+  const questions = [
+    { text: "유모차 이용자도 교통약자에 포함된다", answer: true, explanation: "장애인, 노령자, 임산부, 영유아를 동반한 사람, 어린이 등이 교통약자에 포함된다." },
+    { text: "보도는 이동편의시설 설치 대상이다.", answer: true, explanation: "보도, 여객시설, 교통수단 등이 이동편의시설 설치대상이다." },
+    { text: "경상북도 교통약자 이동편의시설 기술지원센터는 광역이동지원 서비스를 실시한다", answer: false, explanation: "실태조사, 교육 및 홍보, 연구조사, 종합상담센터 등 기술관련업무가 주 업무이다." },
+    { text: "교통약자도 경상북도 이동편의시설 기술지원센터를 이용할 수 있다.", answer: true, explanation: "관공서, 사업자, 교통약자 모두 이용 가능하다." },
+    { text: "대중교통 이용이나 이동에 불편을 느낀적이 있다.", answer: true, explanation: "불편하신 사항에 대해 경상북도 이동편의시설 기술지원센터에 홈페이지 또는 유선전화로 문의 주세요.<br>1566-7710" }
+  ];
+
+  let current = 0;
+  let score = 0;
+  let stats = questions.map(() => ({ o: 0, x: 0 }));
+
+  // session id 생성/재사용 (익명 참여 식별용)
+  let sessionId = localStorage.getItem('ox_session_id');
+  if(!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem('ox_session_id', sessionId); }
+
+  // quiz id from querystring (QR에 quiz 파라미터 포함하세요)
+  const params = new URLSearchParams(location.search);
+  const quizId = params.get('quiz') || 'ox_default_quiz';
+
+  async function submitAnswer(qIndex, ans){
+    try{
+      const payload = {
+        quiz_id: quizId,
+        question_index: qIndex,
+        answer: ans,
+        session_id: sessionId,
+        user_agent: navigator.userAgent,
+        meta: { via: 'qr' }
+      };
+      const { error } = await supabase.from('quiz_responses').insert([payload]);
+      if(error){ console.error('submit error', error); }
+    }catch(e){ console.error(e); }
+  }
+
+  function startQuiz() {
+    document.getElementById("intro").style.display = "none";
+    document.getElementById("quiz").style.display = "flex";
+    loadQuestion();
+  }
+
+  function loadQuestion() {
+    document.getElementById("quiz").style.display = "flex";
+    document.getElementById("explanationBox").style.display = "none";
+    document.getElementById("question").textContent = questions[current].text;
+
+    const questionImage = document.getElementById("questionImage");
+    questionImage.src = "11번.png";
+    document.getElementById("quizLabel").textContent = `#QUIZ ${current + 1}`;
+    questionImage.style.display = "block";
+  }
+
+  function checkAnswer(userAnswer) {
+    // 클라이언트에서 답 제출
+    submitAnswer(current, userAnswer ? 'O' : 'X');
+
+    const correct = questions[current].answer;
+    if (userAnswer) stats[current].o++;
+    else stats[current].x++;
+    if (userAnswer === correct || current === 4) score++;
+
+    document.getElementById("quiz").style.display = "none";
+    document.getElementById("explanationBox").style.display = "flex";
+
+    const judge = document.getElementById("judgement");
+    const exp = document.getElementById("explanationText");
+    if (current !== 4) {
+      judge.textContent = userAnswer === correct ? "정답입니다!" : "오답입니다!";
+      judge.className = userAnswer === correct ? "judgement correct" : "judgement wrong";
+    } else {
+      judge.textContent = "";
+    }
+    exp.innerHTML = questions[current].explanation;
+  }
+
+  function nextQuestion() {
+    current++;
+    if (current < questions.length) {
+      loadQuestion();
+    } else {
+      showFinal();
+    }
+  }
+
+  function showFinal() {
+    document.getElementById("explanationBox").style.display = "none";
+    document.getElementById("finalScreen").style.display = "flex";
+    document.getElementById("finalResult").textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다!`;
+  }
+
+  function showStats() {
+    // 관리자 인증 후 서버에 저장된 전체 응답을 집계해서 보여줍니다.
+    adminAuthAndShow();
+  }
+
+  // --- Admin UI & Stats -------------------------------------------------
+  // 간단한 패스워드 기반 보호: 실제 운영에서는 서버 측 인증 또는
+  // 안전한 RLS 정책을 사용하세요. 기본 패스워드를 배포 전에 바꾸세요.
+  const ADMIN_PASSWORD = 'please-change-me';
+
+  async function adminAuthAndShow(){
+    const pwd = prompt('관리자 비밀번호를 입력하세요');
+    if(!pwd) return;
+    if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+    // 가져오기: quiz_id에 해당하는 모든 응답을 불러와 클라이언트에서 집계
+    try{
+      const { data, error } = await supabase
+        .from('quiz_responses')
+        .select('*')
+        .eq('quiz_id', quizId)
+        .limit(10000);
+      if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다'); return; }
+      const agg = {};
+      for(const r of data){
+        const qi = r.question_index;
+        const ans = String(r.answer).toUpperCase();
+        if(!agg[qi]) agg[qi] = { O:0, X:0, total:0 };
+        if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
+        else agg[qi].X++;
+        agg[qi].total++;
+      }
+      // render
+      let html = `<div style="padding:12px; max-height:240px; overflow:auto; font-size:14px;">`;
+      for(let i=0;i<questions.length;i++){
+        const a = agg[i] || {O:0,X:0,total:0};
+        html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total})</div>`;
+      }
+      html += `</div>`;
+      const panel = document.getElementById('adminPanel');
+      panel.querySelector('.content').innerHTML = html;
+      panel.style.display = 'block';
+      panel.scrollIntoView({behavior:'smooth'});
+    }catch(e){ console.error(e); alert('오류'); }
+  }
+</script>
+<!-- 관리자 통계 패널 (초기 상태는 숨김) -->
+<div id="adminPanel" style="display:none; position:fixed; right:12px; bottom:12px; width:360px; max-width:90%; background:#fff; border:2px solid #2196f3; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.2); z-index:9999; font-family: sans-serif;">
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid #eee; background:#f7fbff;">
+    <strong style="font-size:14px;">관리자 통계</strong>
+    <button onclick="document.getElementById('adminPanel').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:18px;">✕</button>
+  </div>
+  <div class="content" style="padding:8px 12px; font-size:13px; color:#111">로딩 중...</div>
+  <div style="padding:8px 12px; border-top:1px solid #eee; text-align:right;"><button onclick="document.getElementById('adminPanel').style.display='none'" style="padding:6px 10px; border-radius:6px; border:none; background:#607d8b; color:#fff; cursor:pointer">닫기</button></div>
+</div>
+</body>
+</html>

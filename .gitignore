@@ -1,4 +1,13 @@
-# Logs
+node_modules/
+dist/
+/.idea/
+/.vscode/
+.DS_Store
+public/env.js
+.env
+.env.local
+.env.*.local
+/.env# Logs
 logs
 *.log
 npm-debug.log*
