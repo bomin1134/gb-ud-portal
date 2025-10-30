@@ -411,6 +411,32 @@
     }
   }
 
+  async function resetStatistics(){
+    const pwd = prompt('관리자 비밀번호를 입력하세요');
+    if(!pwd) return;
+    if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+    if(!confirm('정말 이 퀴즈의 모든 응답을 삭제하고 통계를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+
+    // 1) 우선 RPC 호출 시도
+    try{
+      const { data, error } = await supabase.rpc('reset_quiz_statistics', { p_quiz_id: quizId });
+      if(error){ throw error; }
+      alert('통계가 초기화되었습니다. (RPC)');
+      adminAuthAndShow();
+      return;
+    }catch(e){
+      console.warn('RPC reset failed, falling back to client-side delete', e);
+    }
+
+    // 2) RPC가 없으면 클라이언트에서 삭제 시도 (주의: RLS에 따라 실패할 수 있음)
+    try{
+      const { error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
+      if(error){ console.error('delete error', error); alert('초기화 실패: '+(error.message||JSON.stringify(error))); return; }
+      alert('통계가 초기화되었습니다. (삭제 방식)');
+      adminAuthAndShow();
+    }catch(e){ console.error('reset error', e); alert('초기화 도중 오류가 발생했습니다. 서버 측에서 RPC(reset_quiz_statistics)를 만드는 것을 권장합니다.'); }
+  }
+
   // Expose handlers to global scope so inline onclick attributes (in HTML) can call them.
   // When using <script type="module">, top-level functions are module-scoped and
   // not added to window — that prevents onclick="startQuiz()" from working.
@@ -447,7 +473,10 @@
     <button onclick="document.getElementById('adminPanel').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:18px;">✕</button>
   </div>
   <div class="content" style="padding:8px 12px; font-size:13px; color:#111">로딩 중...</div>
-  <div style="padding:8px 12px; border-top:1px solid #eee; text-align:right;"><button onclick="document.getElementById('adminPanel').style.display='none'" style="padding:6px 10px; border-radius:6px; border:none; background:#607d8b; color:#fff; cursor:pointer">닫기</button></div>
+  <div style="padding:8px 12px; border-top:1px solid #eee; text-align:right;">
+    <button onclick="resetStatistics()" style="margin-right:8px; padding:6px 10px; border-radius:6px; border:none; background:#e53935; color:#fff; cursor:pointer">초기화</button>
+    <button onclick="document.getElementById('adminPanel').style.display='none'" style="padding:6px 10px; border-radius:6px; border:none; background:#607d8b; color:#fff; cursor:pointer">닫기</button>
+  </div>
 </div>
 </body>
 </html>
