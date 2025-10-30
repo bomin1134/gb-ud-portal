@@ -322,47 +322,93 @@
       console.warn('supabase not configured or invalid client', supabase);
       return;
     }
-    // 가져오기: quiz_id에 해당하는 모든 응답을 불러와 클라이언트에서 집계
+    // 우선: Supabase 서버 측 RPC(get_quiz_statistics)를 사용해 집계 요청 (대량 데이터에 적합)
+    // 관리자는 Supabase SQL Editor에 아래 함수를 생성해야 합니다. (아래 안내 참고)
     try{
-      const { data, error } = await supabase
-        .from('quiz_responses')
-        .select('*')
-        .eq('quiz_id', quizId)
-        .limit(10000);
-      if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
-      const agg = {};
-      for(const r of data){
-        const qi = r.question_index;
-        const ans = String(r.answer).toUpperCase();
-        if(!agg[qi]) agg[qi] = { O:0, X:0, total:0 };
-        if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
-        else agg[qi].X++;
-        agg[qi].total++;
+      // RPC 호출: 함수명이 get_quiz_statistics이고 파라미터 이름은 p_quiz_id입니다.
+      const { data, error } = await supabase.rpc('get_quiz_statistics', { p_quiz_id: quizId });
+      if(error){
+        console.warn('RPC get_quiz_statistics failed, falling back to client aggregation', error);
+        throw error;
       }
-      // render
-      let html = `<div style="padding:12px; max-height:240px; overflow:auto; font-size:14px;">`;
+
+      // data: array of rows per question with fields: question_index, count_o, count_x, total_responses, correct_rate, total_participants, avg_score
+      const panel = document.getElementById('adminPanel');
+      if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
+
+      const contentEl = panel.querySelector('.content');
+      if(!contentEl){ throw new Error('panel .content element missing'); }
+
+      // overall summary (take from first row if exists)
+      let totalParticipants = 0;
+      let avgScore = 0;
+      if(Array.isArray(data) && data.length>0){
+        totalParticipants = data[0].total_participants || 0;
+        avgScore = data[0].avg_score || 0;
+      }
+
+      let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
+        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+        <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScore}</div>
+        <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+
+      // Ensure we render rows for each question index in order
+      const rows = Array.isArray(data) ? data.sort((a,b)=> (a.question_index||0)-(b.question_index||0)) : [];
       for(let i=0;i<questions.length;i++){
-        const a = agg[i] || {O:0,X:0,total:0};
-        html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total})</div>`;
+        const row = rows.find(r=>Number(r.question_index)===i) || null;
+        const countO = row ? Number(row.count_o||0) : 0;
+        const countX = row ? Number(row.count_x||0) : 0;
+        const total = row ? Number(row.total_responses||0) : 0;
+        const correctRate = row ? Number(row.correct_rate||0) : 0;
+        html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${countO} &nbsp; X=${countX} &nbsp; (총 ${total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
       }
       html += `</div>`;
-      const panel = document.getElementById('adminPanel');
-      if(!panel){
-        console.error('adminPanel element not found');
-        alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.');
-        return;
-      }
+
+      contentEl.innerHTML = html;
+      panel.style.display = 'block';
+      panel.scrollIntoView({behavior:'smooth'});
+
+    }catch(rpcErr){
+      // RPC가 없거나 실패한 경우 기존 클라이언트 집계 방식(모든 행을 읽어 들여 집계)으로 폴백
       try{
+        const { data, error } = await supabase.from('quiz_responses').select('*').eq('quiz_id', quizId).limit(100000);
+        if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
+        const agg = {};
+        const sessions = new Set();
+        const perSessionScore = {};
+        for(const r of data){
+          const qi = r.question_index;
+          const ans = String(r.answer).toUpperCase();
+          if(!agg[qi]) agg[qi] = { O:0, X:0, total:0 };
+          if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
+          else agg[qi].X++;
+          agg[qi].total++;
+
+          if(r.session_id){ sessions.add(r.session_id); perSessionScore[r.session_id] = (perSessionScore[r.session_id]||0) + ((ans==='O'||ans==='TRUE'||ans==='T')?1:0); }
+        }
+        const totalParticipants = sessions.size;
+        const avgScore = Object.keys(perSessionScore).length>0 ? (Object.values(perSessionScore).reduce((a,b)=>a+b,0)/Object.keys(perSessionScore).length).toFixed(2) : 0;
+
+        let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
+          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+          <div style="margin-bottom:8px;"><strong>사람당 평균 점수:</strong> ${avgScore}</div>
+          <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+        for(let i=0;i<questions.length;i++){
+          const a = agg[i] || {O:0,X:0,total:0};
+          const correctRate = a.total? ((a.O / a.total)*100).toFixed(2) : '0.00';
+          html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
+        }
+        html += `</div>`;
+
+        const panel = document.getElementById('adminPanel');
+        if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
         const contentEl = panel.querySelector('.content');
         if(!contentEl){ throw new Error('panel .content element missing'); }
         contentEl.innerHTML = html;
         panel.style.display = 'block';
         panel.scrollIntoView({behavior:'smooth'});
-      }catch(e){
-        console.error('rendering admin panel failed', e);
-        alert('관리자 패널 렌더링 중 오류가 발생했습니다: '+(e.message||e));
-      }
-    }catch(e){ console.error(e); alert('오류'); }
+      }catch(e){ console.error(e); alert('오류'); }
+    }
   }
 
   // Expose handlers to global scope so inline onclick attributes (in HTML) can call them.
