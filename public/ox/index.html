@@ -281,8 +281,23 @@
         user_agent: navigator.userAgent,
         meta: { via: 'qr' }
       };
-      const { error } = await supabase.from('quiz_responses').insert([payload]);
-      if(error){ console.error('submit error', error); }
+      // Try inserting with submission_id first. If the table does not have
+      // that column (older schema), retry inserting without it so submissions
+      // continue to work.
+      let res = await supabase.from('quiz_responses').insert([payload]);
+      if(res && res.error){
+        console.warn('submit error with submission_id, retrying without submission_id', res.error);
+        const payload2 = Object.assign({}, payload);
+        delete payload2.submission_id;
+        const res2 = await supabase.from('quiz_responses').insert([payload2]);
+        if(res2 && res2.error){
+          console.error('submit error (retry without submission_id) failed', res2.error);
+        }else{
+          console.log('submit success (without submission_id)');
+        }
+      }else{
+        console.log('submit success', res && res.data ? res.data : null);
+      }
     }catch(e){ console.error(e); }
   }
 
