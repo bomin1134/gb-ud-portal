@@ -269,13 +269,17 @@
     .quiz-image-wrap { max-width: 320px; }
     .quiz-image-wrap img, #questionImage { width: 100%; height: auto; max-width: 320px; }
     /* Keep button sizes as-is (user requested), but make the contained images scale down */
-    .btn.o img, .btn.x img { max-width: 44vw; height: auto; width: auto; }
+  /* Button layout: constrain button outer size on mobile so they fit the frame */
+  .answer-buttons { gap: 28px; padding: 0 8px; }
+  .btn { width: 120px; height: 120px; font-size: 36px; border-radius: 12px; }
+  .btn.o img, .btn.x img { width: 100%; height: 100%; max-width: 120px; max-height: 120px; object-fit: contain; }
     /* Question and explanation text scaled down for mobile */
     .question { font-size: 26px; line-height: 1.1; }
     #explanationText { font-size: 20px; }
     /* Final screen adjustments for mobile readability */
     #finalResult { font-size: 36px; }
     #finalScreen p { font-size: 20px !important; }
+    .bottom-img { width: 28%; bottom: 12px; }
   }
 </style>
 </head>
