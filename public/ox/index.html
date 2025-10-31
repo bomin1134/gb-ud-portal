@@ -243,6 +243,17 @@
   .btn.o img, .btn.x img { width: 180px; height: 180px; }
 }
 </style>
+<!-- Mobile tweaks -->
+<style>
+  /* Mobile: shift the explanation label slightly right and down so it sits better inside the banner */
+  @media (max-width: 767px) {
+    .explanation-label {
+      top: calc(50% - 10px) !important;   /* down 5px from base (base was -15px -> now -10px) */
+      left: calc(50% - 20px) !important;  /* right 20px from base (base was -40px -> now -20px) */
+      font-size: clamp(20px, 6.5vw, 36px) !important;
+    }
+  }
+</style>
 </head>
 <body>
 <div class="quiz-box" id="intro">
