@@ -440,7 +440,14 @@
             sessions.set(sid, (sessions.get(sid) || 0) + isCorrect);
           }
           const participantCount = sessions.size;
-          const avgPercent = (participantCount > 0 && questions.length > 0) ? (totalCorrectSum / (participantCount * questions.length)) * 100 : 0;
+          // Compute average as the mean of per-participant percentages so it
+          // matches the single-player percent shown on the final screen.
+          let sumParticipantPercent = 0;
+          for(const correctCount of sessions.values()){
+            const pPercent = (questions.length > 0) ? (correctCount / questions.length) * 100 : 0;
+            sumParticipantPercent += pPercent;
+          }
+          const avgPercent = (participantCount > 0) ? (sumParticipantPercent / participantCount) : 0;
           avgScoreDisplay = avgPercent.toFixed(2);
 
           // If we have the admin panel open already, prefer to display these
