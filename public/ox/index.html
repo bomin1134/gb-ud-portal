@@ -259,6 +259,23 @@
       outline: none;
       z-index: 3;
     }
+    /* Mobile-specific size tuning: reduce images and text to fit the blue frame */
+    .quiz-box {
+      padding: 12px;
+      margin: 4vh auto;
+      height: auto;
+      max-width: 92%;
+    }
+    .quiz-image-wrap { max-width: 320px; }
+    .quiz-image-wrap img, #questionImage { width: 100%; height: auto; max-width: 320px; }
+    /* Keep button sizes as-is (user requested), but make the contained images scale down */
+    .btn.o img, .btn.x img { max-width: 44vw; height: auto; width: auto; }
+    /* Question and explanation text scaled down for mobile */
+    .question { font-size: 26px; line-height: 1.1; }
+    #explanationText { font-size: 20px; }
+    /* Final screen adjustments for mobile readability */
+    #finalResult { font-size: 36px; }
+    #finalScreen p { font-size: 20px !important; }
   }
 </style>
 </head>
@@ -278,7 +295,7 @@
     <img id="questionImage" src="11번.png" alt="질문 배경 이미지" />
     <div id="quizLabel">#QUIZ 1</div>
   </div>
-  <div class="question" id="question" style="font-size: 52px; font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+  <div class="question" id="question" style="font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
   <div class="answer-buttons">
     <button class="btn o" onclick="checkAnswer(true)"><img alt="O" src="o.png"/></button>
     <button class="btn x" onclick="checkAnswer(false)"><img alt="X" src="x.png"/></button>
@@ -293,7 +310,7 @@
   </div>
   <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
   <div id="judgement"></div>
-  <div class="explanation" id="explanationText" style="font-size: 50px; font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+  <div class="explanation" id="explanationText" style="font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
   <button class="btn next" onclick="nextQuestion()">다음</button>
   <img class="bottom-img" src="garohyeong.png"/>
 </div>
