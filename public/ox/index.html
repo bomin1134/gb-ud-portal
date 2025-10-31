@@ -279,7 +279,7 @@
         session_id: sessionId,
         submission_id: submissionId,
         user_agent: navigator.userAgent,
-        meta: { via: 'qr' }
+        meta: { via: 'qr', submission_id: submissionId }
       };
       // Try inserting with submission_id first. If the table does not have
       // that column (older schema), retry inserting without it so submissions
@@ -287,8 +287,9 @@
       let res = await supabase.from('quiz_responses').insert([payload]);
       if(res && res.error){
         console.warn('submit error with submission_id, retrying without submission_id', res.error);
-        const payload2 = Object.assign({}, payload);
-        delete payload2.submission_id;
+  const payload2 = Object.assign({}, payload);
+  // older schemas may not have a submission_id column; keep it in meta
+  delete payload2.submission_id;
         const res2 = await supabase.from('quiz_responses').insert([payload2]);
         if(res2 && res2.error){
           console.error('submit error (retry without submission_id) failed', res2.error);
@@ -419,7 +420,10 @@
       // This ensures average = participant-score-sum / participant-count.
       let avgScoreDisplay = '0.00';
       try{
-  const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id,submission_id').eq('quiz_id', quizId).limit(100000);
+      // Do not request submission_id column directly because older DB schemas
+      // may not have it. Fetch meta (JSON) instead and read submission_id from
+      // meta if present.
+      const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id,meta').eq('quiz_id', quizId).limit(100000);
         if(!rowsErr && Array.isArray(rows)){
           totalResponses = rows.length;
           // Group rows by session_id when available so a single participant's
@@ -444,7 +448,7 @@
             if(isCorrect) totalCorrectSum++;
             if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCorrect.length && isCorrect) perQuestionCorrect[qi]++;
 
-            const sid = r.submission_id || r.session_id || `row_${i}`;
+            const sid = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
             sessions.set(sid, (sessions.get(sid) || 0) + isCorrect);
           }
           const participantCount = sessions.size;
@@ -478,7 +482,7 @@
   const computedParticipantCount = panelEl && (typeof panelEl._participantCount === 'number') ? panelEl._participantCount : null;
   const displayParticipants = (computedParticipantCount !== null) ? computedParticipantCount : (totalParticipants && totalParticipants > 0 ? totalParticipants : totalResponses);
       let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
+        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants}</div>
         <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
         <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
 
@@ -538,10 +542,10 @@
           const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0;
           agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;
 
-          // Group by session_id if present so a single participant's answers
-          // across multiple questions count as one participant rather than
-          // being counted once per question.
-          const sessionKey = r.submission_id || r.session_id || `row_${i}`;
+          // Group by submission_id (from meta if necessary) then session_id so a
+          // single participant's answers across multiple questions count as
+          // one participant rather than being counted once per question.
+          const sessionKey = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
           perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + isCorrect;
         }
 
@@ -557,7 +561,7 @@
         const totalResponses = Array.isArray(data) ? data.length : 0;
 
         let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants} &nbsp; <small>(응답수: ${totalResponses})</small></div>
+          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
           <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
           <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
         for(let i=0;i<questions.length;i++){
