@@ -171,7 +171,10 @@
     /* Move the quiz label higher (closer to top of the background image) and reduce size so it doesn't overlap header */
   #quizLabel { font-size: 34px !important; }
   /* nudge the banner slightly to the right on desktop so it visually centers with the layout */
-  .quiz-image-wrap { transform: translateX(12px); }
+  .quiz-image-wrap { transform: translateX(24px); }
+  /* also nudge the image inside the wrapper a little to shift the visible yellow banner
+    without moving the centered label too far — helps when the PNG canvas has extra padding */
+  .quiz-image-wrap img { transform: translateX(8px); }
     .answer-buttons { gap: 64px; }
     .btn {
       width: 160px;
@@ -225,7 +228,8 @@
   #explanationBox > div > img { width: 460px !important; height: auto !important; }
   .explanation-label { font-size: 40px !important; line-height: 1 !important; }
   /* bigger nudge for large-desktop (1920x1080) so the yellow banner sits slightly right as requested */
-  .quiz-image-wrap { transform: translateX(30px); }
+  .quiz-image-wrap { transform: translateX(60px); }
+  .quiz-image-wrap img { transform: translateX(18px); }
   #finalScreen img { width: 340px !important; height: auto !important; }
   #finalResult { font-size: 44px !important; }
   #finalScreen p { font-size: 28px !important; }
