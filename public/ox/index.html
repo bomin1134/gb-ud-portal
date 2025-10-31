@@ -303,6 +303,28 @@
     }
     /* Ensure the intro stats button fits */
     .btn.stats { min-width: 110px; height: 44px; padding: 6px 10px; font-size: 16px; }
+    /* --- User-requested tweaks: start button +30%, stats button 50%, halve some images, halve final-result font --- */
+    /* Increase only the START button inside #intro by ~30% (don't affect other .btn.next instances) */
+    #intro .btn.next {
+      min-width: 104px; /* 80px -> ~104px (approx +30% from previously set 80) */
+      height: 47px;     /* 36px -> ~47px */
+      font-size: 16px;
+      padding: 8px 16px;
+    }
+    /* Halve the visible footprint of the stats button */
+    .btn.stats {
+      min-width: 55px;
+      height: 22px;
+      padding: 4px 6px;
+      font-size: 8px;
+    }
+    /* Halve sizes for '제목 없음' (topright-logo) and garohyeong images */
+    .topright-logo { height: 16px; }
+    /* Intro hero 'garohyeong' and bottom decorative 'garohyeong' */
+    #intro img[src$="garohyeong.png"], .quiz-box img[src$="garohyeong.png"] { max-width: 130px; width: 60%; height: auto; }
+    .bottom-img { width: 14%; bottom: 10px; }
+    /* Halve the final summary font (총 X문제 중 Y개 ...) */
+    #finalResult { font-size: 18px !important; }
   }
 </style>
 </head>
