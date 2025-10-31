@@ -276,6 +276,9 @@
     /* Question and explanation text scaled down for mobile */
     .question { font-size: 26px; line-height: 1.1; }
     #explanationText { font-size: 20px; }
+  /* Reduce judgement and final result font sizes by ~50% on mobile per request */
+  .judgement.correct, .judgement.wrong { font-size: 34px; }
+  #finalResult { font-size: 34px; }
     /* Final screen adjustments for mobile readability */
     #finalResult { font-size: 36px; }
     #finalScreen p { font-size: 20px !important; }
@@ -289,12 +292,13 @@
 
     /* Reduce the footprint of the control buttons like '다음' and '처음으로' on mobile */
     .btn.next, .btn.reset {
+      /* halve the 'next' / 'reset' button footprint on mobile */
       width: auto;
-      min-width: 120px;
-      height: 54px;
-      padding: 8px 14px;
-      font-size: 18px;
-      border-radius: 8px;
+      min-width: 60px;
+      height: 27px;
+      padding: 4px 7px;
+      font-size: 9px;
+      border-radius: 6px;
       line-height: 1.1;
     }
     /* Ensure the intro stats button fits */
