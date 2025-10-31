@@ -664,40 +664,8 @@
   // Expose supabase to window for debugging (will be undefined if not configured)
   try{ window.supabase = supabase; }catch(e){/* ignore */}
 
-  // Apply a forced zoom on desktop and ensure adminPanel .content exists
-  // Note: changing browser zoom programmatically isn't universally supported.
-  // We try CSS `zoom` (works in Chrome/Edge) and fall back to a transform
-  // scale for Firefox. This affects layout and scrolling; test on your target
-  // browsers and adjust as needed.
-  function applyForcedZoom() {
-    const forced = 0.5; // 50%
-    try{
-      // Only apply for wider (desktop) viewports to avoid breaking mobile layout
-      if(window.innerWidth >= 1024){
-        // Preferred: CSS zoom (works in Blink-based browsers like Chrome/Edge)
-        try{ document.body.style.zoom = String(forced); }catch(e){ /* ignore */ }
-
-        // Firefox doesn't support `zoom`; detect and apply transform fallback
-        try{
-          const ua = navigator.userAgent || '';
-          if(ua.toLowerCase().includes('firefox')){
-            document.documentElement.style.transformOrigin = '0 0';
-            document.documentElement.style.transform = `scale(${forced})`;
-            // expand width so that scaled content doesn't get clipped
-            document.documentElement.style.width = `${100 / forced}%`;
-            // prevent horizontal scroll jump
-            window.scrollTo(0,0);
-          }
-        }catch(e){/* ignore */}
-      }
-    }catch(e){ console.warn('applyForcedZoom failed', e); }
-  }
-
   // Ensure adminPanel .content exists (defensive) once DOM is ready
   document.addEventListener('DOMContentLoaded', ()=>{
-    // apply zoom early on DOM ready
-    applyForcedZoom();
-
     const panel = document.getElementById('adminPanel');
     if(panel){
       let content = panel.querySelector('.content');
