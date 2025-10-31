@@ -33,7 +33,8 @@
       max-width: 800px;
       width: 100%;
       word-break: keep-all;
-      transform: translateY(30px);
+      /* use margin/padding for spacing instead of translate to keep flow predictable */
+      margin-top: 20px;
     }
     .answer-buttons {
       display: flex;
@@ -44,7 +45,6 @@
       margin-top: 60px;
       margin-bottom: 60px;
       box-sizing: border-box;
-      transform: translateY(30px);
     }
     .btn {
       width: 67.5vw;
@@ -114,20 +114,45 @@
   right: 20px;
   height: 72px;
 }
-/* Position the quiz label and explanation label so they sit inside
-   the yellow rounded banner (move down and slightly to the right).
-   Use !important to override inline styles placed on these elements. */
-#quizLabel {
-  top: 8% !important;
-  left: 50% !important;
-  transform: translateX(-50%) translateY(0) !important;
-  font-size: 36px !important;
+/* Image wrapper: make the image a predictable reference for absolute labels */
+.quiz-image-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 650px; /* default max; media queries may override */
+  margin: 0 auto;
 }
-#explanationBox > div > div {
-  top: 8% !important;
-  left: 50% !important;
-  transform: translateX(-50%) translateY(0) !important;
-  font-size: 34px !important;
+.quiz-image-wrap img { display:block; width:100%; height:auto; }
+
+/* Center the label horizontally and vertically inside the image wrapper.
+   Use translate(-50%, -50%) so the label stays centered regardless of image size.
+   Font-size is responsive using clamp so it won't overflow the banner. */
+#quizLabel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+  font-family: 'Arial Black', 'Malgun Gothic', sans-serif;
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: clamp(28px, 4.5vw, 44px);
+  color: #0a2c5d;
+}
+
+/* Explanation label used on the explanation screen */
+.explanation-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+  font-family: 'Arial Black', 'Malgun Gothic', sans-serif;
+  font-weight: 700;
+  white-space: nowrap;
+  font-size: clamp(28px, 4.5vw, 40px);
+  color: #0a2c5d;
 }
 </style>
 <style>
@@ -144,7 +169,7 @@
     }
     .question { font-size: 30px; line-height:1.15; }
     /* Move the quiz label higher (closer to top of the background image) and reduce size so it doesn't overlap header */
-  #quizLabel { font-size: 34px !important; top: 45% !important; left: 55% !important; transform: translateX(-50%) translateY(0) !important; }
+  #quizLabel { font-size: 34px !important; }
     .answer-buttons { gap: 64px; }
     .btn {
       width: 160px;
@@ -178,7 +203,7 @@
   #finalResult { font-size: 40px !important; }
 
   /* override inline-large quiz label and explanation text and images */
-  #quizLabel { font-size: 34px !important; top: 45% !important; left: 55% !important; transform: translateX(-50%) translateY(0) !important; }
+  #quizLabel { font-size: 34px !important; }
   /* explanation background image and label */
   #explanationBox > div > img { width: 320px !important; height: auto !important; }
   #explanationBox > div > div { font-size: 32px !important; top: 48% !important; left: 55% !important; transform: translateX(-50%) translateY(0) !important; }
@@ -190,25 +215,13 @@
 </style>
 <!-- Large-desktop (≈1920×1080) tuning -->
 <style>
-@media (min-width: 1600px) {
+  @media (min-width: 1600px) {
   .quiz-box { max-width: 1000px; padding-top: 40px; }
   #questionImage { width: 460px !important; height: auto !important; }
-  #quizLabel {
-    top: 6% !important;
-    left: 50% !important;
-    transform: translateX(-50%) translateY(0) !important;
-    font-size: 44px !important;
-    line-height: 1 !important;
-    white-space: nowrap;
-  }
+  /* keep label centered via .quiz-image-wrap; just increase font-size for large screens */
+  #quizLabel { font-size: 44px !important; line-height: 1 !important; }
   #explanationBox > div > img { width: 460px !important; height: auto !important; }
-  #explanationBox > div > div {
-    top: 6% !important;
-    left: 50% !important;
-    transform: translateX(-50%) translateY(0) !important;
-    font-size: 40px !important;
-    line-height: 1 !important;
-  }
+  .explanation-label { font-size: 40px !important; line-height: 1 !important; }
   #finalScreen img { width: 340px !important; height: auto !important; }
   #finalResult { font-size: 44px !important; }
   #finalScreen p { font-size: 28px !important; }
@@ -229,9 +242,9 @@
 
 <div class="quiz-box" id="quiz" style="display:none">
   <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
-  <div style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%);">
-    <img id="questionImage" src="11번.png" style="width: 650px; display: block;"/>
-    <div id="quizLabel" style="position: absolute; top: 30%; left: 50%; transform: translateX(-50%); color: #0a2c5d; font-family: 'Arial Black', 'Malgun Gothic', sans-serif; font-weight: 999; font-size: 80px; pointer-events: none; z-index: 2;">#QUIZ 1</div>
+  <div class="quiz-image-wrap">
+    <img id="questionImage" src="11번.png" alt="질문 배경 이미지" />
+    <div id="quizLabel">#QUIZ 1</div>
   </div>
   <div class="question" id="question" style="font-size: 52px; font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
   <div class="answer-buttons">
@@ -242,9 +255,9 @@
 </div>
 
 <div class="quiz-box" id="explanationBox" style="display:none; position: relative;">
-  <div style="position: absolute; top: 60px; left: 50%; transform: translateX(-50%);">
-    <img src="11번.png" style="width: 650px; display: block;" alt="해설 배경 이미지"/>
-    <div style="position: absolute; top: 35%; left: 50%; transform: translateX(-50%); color: #0a2c5d; font-family: 'Arial Black', 'Malgun Gothic', sans-serif; font-weight: 700; font-size: 75px; pointer-events: none; z-index: 2;">문제 해설</div>
+  <div class="quiz-image-wrap">
+    <img src="11번.png" alt="해설 배경 이미지" />
+    <div class="explanation-label">문제 해설</div>
   </div>
   <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
   <div id="judgement"></div>
