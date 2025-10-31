@@ -426,11 +426,19 @@
           // multiple answers (one per question) count as one participant.
           const sessions = new Map();
           let totalCorrectSum = 0;
-          // also build per-question correct counts so we can render accurate per-question stats
+          // build per-question stats (counts and correct counts)
           const perQuestionCorrect = Array(questions.length).fill(0).map(()=>0);
+          const perQuestionCounts = Array(questions.length).fill(0).map(()=>({ o:0, x:0, total:0 }));
           for(const [i, r] of rows.entries()){
             const qi = Number(r.question_index);
-            const ans = String(r.answer).toUpperCase();
+            const ansRaw = r.answer;
+            const ans = String(ansRaw).toUpperCase();
+            // tally O/X counts
+            if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCounts.length){
+              if(ans === 'O' || ans === 'TRUE' || ans === 'T') perQuestionCounts[qi].o++;
+              else perQuestionCounts[qi].x++;
+              perQuestionCounts[qi].total++;
+            }
             const correctBool = !!(questions[qi] && questions[qi].answer);
             const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctBool) ? 1 : 0;
             if(isCorrect) totalCorrectSum++;
@@ -455,7 +463,12 @@
           // We'll stash them on the panel element for the rendering logic below.
           try{
             const panel = document.getElementById('adminPanel');
-            if(panel){ panel._perQuestionCorrect = perQuestionCorrect; panel._totalResponses = totalResponses; panel._participantCount = participantCount; }
+            if(panel){
+              panel._perQuestionCorrect = perQuestionCorrect;
+              panel._perQuestionCounts = perQuestionCounts;
+              panel._totalResponses = totalResponses;
+              panel._participantCount = participantCount;
+            }
           }catch(e){/* ignore */}
         }
       }catch(e){ console.warn('failed to fetch rows for avg calc', e); }
@@ -471,17 +484,26 @@
 
       // Ensure we render rows for each question index in order
       const rpcRows = Array.isArray(data) ? data.sort((a,b)=> (a.question_index||0)-(b.question_index||0)) : [];
-      // check if we computed per-question correct counts from raw rows earlier
+      // check if we computed per-question correct counts and counts from raw rows earlier
       const panelPerQ = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCorrect ? p._perQuestionCorrect : null; }catch(e){return null;} })();
+      const panelPerCounts = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCounts ? p._perQuestionCounts : null; }catch(e){return null;} })();
       for(let i=0;i<questions.length;i++){
         const row = rpcRows.find(r=>Number(r.question_index)===i) || null;
-        const countO = row ? Number(row.count_o||0) : 0;
-        const countX = row ? Number(row.count_x||0) : 0;
-        const total = row ? Number(row.total_responses||0) : 0;
+        let countO = 0, countX = 0, total = 0;
+        // Prefer per-question counts computed from raw rows when available
+        if(panelPerCounts && typeof panelPerCounts[i] !== 'undefined'){
+          countO = Number(panelPerCounts[i].o||0);
+          countX = Number(panelPerCounts[i].x||0);
+          total = Number(panelPerCounts[i].total||0);
+        }else{
+          countO = row ? Number(row.count_o||0) : 0;
+          countX = row ? Number(row.count_x||0) : 0;
+          total = row ? Number(row.total_responses||0) : 0;
+        }
         // Prefer per-question correct counts from raw rows when available, otherwise fall back to RPC's correct_rate
         let correctRate = 0;
-        if(panelPerQ && typeof panelPerQ[i] !== 'undefined'){
-          correctRate = total ? ((panelPerQ[i] / total) * 100) : 0;
+        if(panelPerQ && typeof panelPerQ[i] !== 'undefined' && total > 0){
+          correctRate = ((panelPerQ[i] / total) * 100);
           correctRate = Number(correctRate).toFixed(2);
         }else{
           correctRate = row ? Number(row.correct_rate||0) : 0;
