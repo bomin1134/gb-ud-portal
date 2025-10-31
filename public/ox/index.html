@@ -248,22 +248,60 @@
 </style>
 <!-- Mobile tweaks -->
 <style>
-  /* Mobile: shift the explanation label slightly right and down so it sits better inside the banner */
+  /* Mobile: keep viewport-based responsive behavior but make sizes conservative
+     so images/buttons don't overflow and elements don't overlap. This preserves
+     the desktop rules while ensuring the mobile presentation is tidy. */
   @media (max-width: 767px) {
+    /* Make the main boxed container adapt to short/tall viewports */
+    .quiz-box {
+      max-width: 96%;
+      margin: 3vh auto;
+      height: auto !important;
+      min-height: calc(100vh - 40px);
+      padding: 16px !important;
+      box-sizing: border-box;
+    }
+
+    /* Reduce large inline images used on the intro/final screens */
+    #intro img:not(.topright-logo),
+    #intro img:not(.topright-logo),
+    .quiz-image-wrap img,
+    #finalScreen img {
+      width: 80% !important;
+      max-width: 420px !important;
+      height: auto !important;
+    }
+
+    /* smaller top-right logo on mobile */
+    .topright-logo { height: 36px !important; top: 12px; right: 12px; }
+
+    /* reduce bottom decorative image so it doesn't compete with controls */
+    .bottom-img { width: 30% !important; bottom: 12px !important; }
+
+    /* Make O/X controls reasonable size on small screens */
+    .btn { width: auto !important; height: auto !important; box-shadow: none; }
+    .btn.o, .btn.x { display: inline-flex; align-items: center; justify-content: center; width: 48% !important; max-width: 180px !important; height: auto !important; border-radius: 50%; }
+    .btn.o img, .btn.x img { width: 48vw !important; max-width: 160px !important; height: auto !important; }
+
+    .btn.next, .btn.stats, .btn.reset { height: 48px !important; font-size: 18px !important; padding: 8px 14px !important; border-radius: 8px !important; }
+
+    .question { font-size: 24px !important; }
+    .judgement.correct, .judgement.wrong { font-size: 36px !important; }
+    #finalResult { font-size: 32px !important; }
+
+    /* Explanation label: small, stable nudge; remove debug outline */
     .explanation-label {
-      /* DEBUG: Force a visible visual nudge and outline on small screens so
-         we can confirm the element's box and movement. Increase the offset
-         so it is clearly visible — remove outline and reduce offsets once
-         confirmed. */
       top: 50% !important;
       left: 50% !important;
-      /* increase to +40px right and +10px down to make the change obvious */
-      transform: translate(calc(-50% + 40px), calc(-50% + 10px)) !important;
-      font-size: clamp(20px, 6.5vw, 36px) !important;
-      /* visible debug outline and ensure it sits above other layers */
-      outline: 3px solid rgba(255,0,0,0.9) !important;
-      z-index: 9999 !important;
+      transform: translate(calc(-50% + 30px), calc(-50% + 5px)) !important;
+      font-size: clamp(20px, 6.5vw, 32px) !important;
+      outline: none !important;
+      z-index: 3 !important;
     }
+
+    /* Defensive: ensure intro fixed inline widths don't force horizontal scroll */
+    #intro img[alt="인트로 퀴즈"],
+    #intro img[alt="가로형 이미지"] { width: 70% !important; max-width: 420px !important; }
   }
 </style>
 </head>
