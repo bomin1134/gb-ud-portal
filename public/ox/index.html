@@ -248,8 +248,10 @@
   /* Mobile: shift the explanation label slightly right and down so it sits better inside the banner */
   @media (max-width: 767px) {
     .explanation-label {
-      top: calc(50% - 10px) !important;   /* down 5px from base (base was -15px -> now -10px) */
-      left: calc(50% - 20px) !important;  /* right 20px from base (base was -40px -> now -20px) */
+      /* moved down 5px then down 5px more -> total down 10px from original desktop base */
+      top: calc(50% - 5px) !important;   /* now 5px above center (moved down 5px from previous mobile setting) */
+      /* moved right 20px then right 30px more -> total right 50px from original desktop base */
+      left: calc(50% + 10px) !important;  /* now 10px right of center (previous was -20px, +30px => +10px) */
       font-size: clamp(20px, 6.5vw, 36px) !important;
     }
   }
