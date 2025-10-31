@@ -304,6 +304,10 @@
     #intro img[alt="가로형 이미지"] { width: 70% !important; max-width: 420px !important; }
   }
 </style>
+<!-- Force explanation text to be ~1/3 of previous size for readability -->
+<style>
+  #explanationText { font-size: calc(50px / 3) !important; line-height: 1.25 !important; }
+</style>
 </head>
 <body>
 <div class="quiz-box" id="intro">
@@ -336,7 +340,7 @@
   </div>
   <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
   <div id="judgement"></div>
-  <div class="explanation" id="explanationText" style="font-size: 50px; font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+  <div class="explanation" id="explanationText" style="font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
   <button class="btn next" onclick="nextQuestion()">다음</button>
   <img class="bottom-img" src="garohyeong.png"/>
 </div>
