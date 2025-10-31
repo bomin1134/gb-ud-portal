@@ -188,6 +188,34 @@
   #finalScreen p { font-size: 26px !important; }
   }
 </style>
+<!-- Large-desktop (≈1920×1080) tuning -->
+<style>
+@media (min-width: 1600px) {
+  .quiz-box { max-width: 1000px; padding-top: 40px; }
+  #questionImage { width: 460px !important; height: auto !important; }
+  #quizLabel {
+    top: 6% !important;
+    left: 50% !important;
+    transform: translateX(-50%) translateY(0) !important;
+    font-size: 44px !important;
+    line-height: 1 !important;
+    white-space: nowrap;
+  }
+  #explanationBox > div > img { width: 460px !important; height: auto !important; }
+  #explanationBox > div > div {
+    top: 6% !important;
+    left: 50% !important;
+    transform: translateX(-50%) translateY(0) !important;
+    font-size: 40px !important;
+    line-height: 1 !important;
+  }
+  #finalScreen img { width: 340px !important; height: auto !important; }
+  #finalResult { font-size: 44px !important; }
+  #finalScreen p { font-size: 28px !important; }
+  .btn { width: 180px; height: 180px; font-size: 40px; }
+  .btn.o img, .btn.x img { width: 180px; height: 180px; }
+}
+</style>
 </head>
 <body>
 <div class="quiz-box" id="intro">
