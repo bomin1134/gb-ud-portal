@@ -114,6 +114,21 @@
   right: 20px;
   height: 72px;
 }
+/* Position the quiz label and explanation label so they sit inside
+   the yellow rounded banner (move down and slightly to the right).
+   Use !important to override inline styles placed on these elements. */
+#quizLabel {
+  top: 45% !important;
+  left: 55% !important;
+  transform: translateX(-50%) translateY(0) !important;
+  font-size: 52px !important;
+}
+#explanationBox > div > div {
+  top: 48% !important;
+  left: 55% !important;
+  transform: translateX(-50%) translateY(0) !important;
+  font-size: 48px !important;
+}
 </style>
 <style>
   /* Desktop-specific layout tweaks to avoid buttons being covered and
@@ -129,7 +144,7 @@
     }
     .question { font-size: 30px; line-height:1.15; }
     /* Move the quiz label higher (closer to top of the background image) and reduce size so it doesn't overlap header */
-  #quizLabel { font-size: 28px !important; top: 18% !important; transform: translateX(-50%) translateY(-10%) !important; }
+  #quizLabel { font-size: 34px !important; top: 45% !important; left: 55% !important; transform: translateX(-50%) translateY(0) !important; }
     .answer-buttons { gap: 64px; }
     .btn {
       width: 160px;
@@ -163,10 +178,10 @@
   #finalResult { font-size: 40px !important; }
 
   /* override inline-large quiz label and explanation text and images */
-  #quizLabel { font-size: 36px !important; }
+  #quizLabel { font-size: 34px !important; top: 45% !important; left: 55% !important; transform: translateX(-50%) translateY(0) !important; }
   /* explanation background image and label */
   #explanationBox > div > img { width: 320px !important; height: auto !important; }
-  #explanationBox > div > div { font-size: 32px !important; top: 30% !important; transform: translateX(-50%) translateY(-8%) !important; }
+  #explanationBox > div > div { font-size: 32px !important; top: 48% !important; left: 55% !important; transform: translateX(-50%) translateY(0) !important; }
   /* ensure the explanation text block that follows the image fits */
   #explanationText { font-size: 30px !important; }
   /* shrink final screen paragraphs so they stay inside the bordered box */
