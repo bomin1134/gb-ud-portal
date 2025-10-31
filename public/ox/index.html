@@ -259,6 +259,19 @@
       outline: none;
       z-index: 3;
     }
+    /* Consistent blue frame: fixed aspect-ratio + clamped width so the
+       border/frame size remains the same across phone models. Uses 9/16
+       portrait ratio which matches the visual samples. */
+    .quiz-box {
+      width: clamp(320px, 86vw, 360px);
+      aspect-ratio: 9 / 16;
+      max-width: 92%;
+      margin: 4vh auto;
+      padding: 12px;
+      box-sizing: border-box;
+      overflow: hidden;
+      border-width: 8px; /* keep the blue border consistent */
+    }
     /* Mobile-specific size tuning: reduce images and text to fit the blue frame */
     .quiz-box {
       padding: 12px;
