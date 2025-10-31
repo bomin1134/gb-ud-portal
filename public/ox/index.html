@@ -129,7 +129,7 @@
     }
     .question { font-size: 36px; line-height:1.15; }
     /* Move the quiz label slightly lower and reduce size so it doesn't overlap header */
-    #quizLabel { font-size: 44px; top: 40%; transform: translateX(-50%) translateY(0); }
+  #quizLabel { font-size: 36px !important; top: 40%; transform: translateX(-50%) translateY(0); }
     .answer-buttons { gap: 64px; }
     .btn {
       width: 180px;
@@ -148,15 +148,25 @@
     }
     .btn.next { z-index: 20; position: relative; }
     .judgement.correct, .judgement.wrong { font-size: 60px; }
-    /* final screen image smaller so text below is visible */
-    #finalScreen img { width: 420px !important; }
+  /* final screen image smaller so text below is visible */
+  #finalScreen img { width: 360px !important; }
     /* reduce decorative images on desktop so they don't dominate the layout */
     /* override some inline widths with !important to ensure effect */
-    #questionImage { width: 520px !important; }
-    #intro img:not(.topright-logo) { width: 60% !important; max-width: 700px; }
-    .bottom-img { width: 28%; bottom: 18px; }
+    #questionImage { width: 420px !important; }
+    #intro img:not(.topright-logo) { width: 50% !important; max-width: 600px; }
+    .bottom-img { width: 24%; bottom: 18px; }
     /* logo slightly smaller on desktop to free vertical space */
-    .topright-logo { height: 48px; }
+    .topright-logo { height: 40px; }
+    /* slightly reduce prominent text sizes on desktop */
+  .question { font-size: 30px !important; }
+  .judgement.correct, .judgement.wrong { font-size: 48px !important; }
+  #finalResult { font-size: 52px !important; }
+
+  /* override inline-large quiz label and explanation text and images */
+  #quizLabel { font-size: 36px !important; }
+  /* explanation background image and label */
+  #explanationBox > div > img { width: 420px !important; }
+  #explanationBox > div > div { font-size: 36px !important; }
   }
 </style>
 </head>
