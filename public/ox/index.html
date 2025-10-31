@@ -120,34 +120,39 @@
      to make better use of horizontal space on wider screens. */
   @media (min-width: 1024px) {
     .quiz-box {
-      max-width: 1100px;
-      height: 85vh;
-      padding: 36px;
+      max-width: 1000px;
+      height: 82vh;
+      padding: 36px 40px; /* more horizontal padding to prevent edge overlap */
+      padding-top: 64px; /* allow room for header/logo */
       box-sizing: border-box;
       overflow: visible; /* allow controls to sit above decorative images */
     }
-    .question { font-size: 42px; }
-    #quizLabel { font-size: 60px; }
-    .answer-buttons { gap: 80px; }
+    .question { font-size: 36px; line-height:1.15; }
+    /* Move the quiz label slightly lower and reduce size so it doesn't overlap header */
+    #quizLabel { font-size: 48px; top: 40%; transform: translateX(-50%) translateY(0); }
+    .answer-buttons { gap: 64px; }
     .btn {
-      width: 220px;
-      height: 220px;
+      width: 180px;
+      height: 180px;
       max-width: none;
       max-height: none;
-      font-size: 48px;
+      font-size: 40px;
       border-radius: 50%;
     }
-    .btn.o img, .btn.x img { width: 220px; height: 220px; }
+    .btn.o img, .btn.x img { width: 160px; height: 160px; }
     .btn.next, .btn.stats, .btn.reset {
-      font-size: 20px;
-      height: 56px;
+      font-size: 18px;
+      height: 52px;
       padding: 8px 14px;
       border-radius: 8px;
     }
     .btn.next { z-index: 20; position: relative; }
-    .judgement.correct, .judgement.wrong { font-size: 72px; }
-    #finalScreen img { width: 600px; }
-    .bottom-img { width: 45%; bottom: 20px; }
+    .judgement.correct, .judgement.wrong { font-size: 60px; }
+    /* final screen image smaller so text below is visible */
+    #finalScreen img { width: 520px; }
+    .bottom-img { width: 38%; bottom: 18px; }
+    /* logo slightly smaller on desktop to free vertical space */
+    .topright-logo { height: 56px; }
   }
 </style>
 </head>
