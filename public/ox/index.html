@@ -129,7 +129,8 @@
 #quizLabel {
   position: absolute;
   top: 50%;
-  left: 50%;
+  /* shift label 10px left relative to center */
+  left: calc(50% - 10px) !important;
   transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
@@ -144,7 +145,8 @@
 .explanation-label {
   position: absolute;
   top: 50%;
-  left: 50%;
+  /* shift explanation label 10px left relative to center */
+  left: calc(50% - 10px) !important;
   transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
@@ -174,7 +176,7 @@
   .quiz-image-wrap { transform: translateX(24px); }
   /* also nudge the image inside the wrapper a little to shift the visible yellow banner
     without moving the centered label too far — helps when the PNG canvas has extra padding */
-  .quiz-image-wrap img { transform: translateX(8px); }
+  .quiz-image-wrap img { transform: translateX(11px); }
     .answer-buttons { gap: 64px; }
     .btn {
       width: 160px;
@@ -229,7 +231,7 @@
   .explanation-label { font-size: 40px !important; line-height: 1 !important; }
   /* bigger nudge for large-desktop (1920x1080) so the yellow banner sits slightly right as requested */
   .quiz-image-wrap { transform: translateX(60px); }
-  .quiz-image-wrap img { transform: translateX(18px); }
+  .quiz-image-wrap img { transform: translateX(21px); }
   #finalScreen img { width: 340px !important; height: auto !important; }
   #finalResult { font-size: 44px !important; }
   #finalScreen p { font-size: 28px !important; }
