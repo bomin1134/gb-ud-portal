@@ -248,21 +248,16 @@
 </style>
 <!-- Mobile tweaks -->
 <style>
-  /* Mobile: shift the explanation label slightly right and down so it sits better inside the banner */
+  /* Mobile: gentle nudge so the explanation label sits inside the yellow banner */
   @media (max-width: 767px) {
     .explanation-label {
-      /* DEBUG: Force a visible visual nudge and outline on small screens so
-         we can confirm the element's box and movement. Increase the offset
-         so it is clearly visible — remove outline and reduce offsets once
-         confirmed. */
-      top: 50% !important;
-      left: 50% !important;
-      /* increase to +40px right and +10px down to make the change obvious */
-      transform: translate(calc(-50% + 40px), calc(-50% + 10px)) !important;
-      font-size: clamp(20px, 6.5vw, 36px) !important;
-      /* visible debug outline and ensure it sits above other layers */
-      outline: 3px solid rgba(255,0,0,0.9) !important;
-      z-index: 9999 !important;
+      top: 50%;
+      left: 50%;
+      /* requested mobile offset: ~+30px right, ~+5px down */
+      transform: translate(calc(-50% + 30px), calc(-50% + 5px));
+      font-size: clamp(20px, 6.5vw, 32px);
+      outline: none;
+      z-index: 3;
     }
   }
 </style>
