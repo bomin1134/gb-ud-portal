@@ -12,6 +12,8 @@
     body.mode-16-9 .quiz-box { aspect-ratio: 16 / 9; }
     /* image wrapper label adjustments (pixel fine-tuning can stay here) */
     .quiz-label { text-shadow: 0 1px 0 rgba(255,255,255,0.6); }
+    /* site logo: keep the '제목 없음' logo identical on every screen */
+    .site-logo{ position: absolute; top: 1rem; right: 1rem; height: 28px; }
     /* fixed frame used on all quiz screens so the blue border doesn't resize with content
        - width/height are clamped for mobile and desktop
        - content inside will scroll if it's too large */
@@ -48,54 +50,61 @@
 
   <!-- Intro -->
   <main class="max-w-3xl mx-auto px-4 py-8">
-  <section id="intro" class="quiz-box fixed-frame flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
-      <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
-      <img class="mb-4 w-3/4 max-w-[520px]" src="garohyeong.png" alt="가로형 이미지" />
-      <img class="mb-4 w-11/12 max-w-[680px]" src="퀴즈.png" alt="인트로 퀴즈" />
+  <section id="intro" class="quiz-box fixed-frame relative flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
+  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
+  <!-- reduced banner sizes (~33% of previous) -->
+  <img class="mb-4 w-1/3 max-w-[260px]" src="garohyeong.png" alt="가로형 이미지" />
+  <!-- '퀴즈' scaled by 250%: w-1/3 (≈33.33%) *2.5 = ≈83.33% => w-5/6; max-w 260px *2.5 = 650px -->
+  <img class="mb-4 w-5/6 max-w-[650px]" src="퀴즈.png" alt="인트로 퀴즈" />
       <button class="start-btn bg-indigo-600 text-white px-6 py-3 rounded-md text-lg font-bold shadow-md" onclick="startQuiz()">시작</button>
       <button class="btn-stats absolute right-4 bottom-4 bg-gray-600 text-white px-3 py-1 rounded-md text-sm" onclick="showStats()">📊 통계 보기</button>
     </section>
 
     <!-- Quiz screen -->
-  <section id="quiz" class="quiz-box fixed-frame hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
-      <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
+  <section id="quiz" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
+  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
       <div class="relative w-full max-w-[650px] mx-auto quiz-image-wrap">
-        <img id="questionImage" class="w-full h-auto rounded" src="11번.png" alt="문제 배경" />
-        <div id="quizLabel" class="quiz-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#0a2c5d] font-extrabold text-2xl">#QUIZ 1</div>
+  <!-- '11번' scaled by 200%: w-1/3 (≈33.33%) *2 = ≈66.66% => w-2/3; max-w 220px *2 = 440px -->
+  <img id="questionImage" class="w-2/3 max-w-[440px] h-auto rounded mx-auto" src="11번.png" alt="문제 배경" />
+  <!-- 'quizLabel' scaled by 180%: text-2xl (~24px) *1.8 = ~43px -->
+  <div id="quizLabel" class="quiz-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#0a2c5d] font-extrabold text-[43px]">#QUIZ 1</div>
       </div>
-      <div id="question" class="question font-bold text-lg mt-4 px-4"></div>
+  <!-- 'question' font-size scaled by 200%: text-lg (~18px) *2 = 36px => text-4xl -->
+  <div id="question" class="question font-bold text-4xl mt-4 px-4"></div>
       <div class="answer-buttons flex justify-evenly gap-6 w-full px-4 mt-8 mb-8">
-        <button class="btn-o flex items-center justify-center w-32 h-32 bg-white rounded-full shadow-md" onclick="checkAnswer(true)"><img src="o.png" alt="O" class="w-24 h-24 object-contain"/></button>
-        <button class="btn-x flex items-center justify-center w-32 h-32 bg-white rounded-full shadow-md" onclick="checkAnswer(false)"><img src="x.png" alt="X" class="w-24 h-24 object-contain"/></button>
+  <button class="btn-o flex items-center justify-center w-[166px] h-[166px] bg-white rounded-full shadow-md" onclick="checkAnswer(true)"><img src="o.png" alt="O" class="w-[125px] h-[125px] object-contain"/></button>
+  <button class="btn-x flex items-center justify-center w-[166px] h-[166px] bg-white rounded-full shadow-md" onclick="checkAnswer(false)"><img src="x.png" alt="X" class="w-[125px] h-[125px] object-contain"/></button>
       </div>
-      <img class="bottom-img w-1/5 absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
+  <img class="bottom-img w-1/6 absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
     </section>
 
     <!-- Explanation -->
-  <section id="explanationBox" class="quiz-box fixed-frame hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full relative">
+  <section id="explanationBox" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
       <div class="relative w-full max-w-[650px] mx-auto quiz-image-wrap">
-        <img src="11번.png" class="w-full rounded" alt="해설 배경" />
-        <div class="explanation-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-extrabold text-2xl text-[#0a2c5d]">문제 해설</div>
+  <!-- match the quiz image sizing for consistency -->
+  <img src="11번.png" class="w-2/3 max-w-[440px] h-auto rounded mx-auto" alt="해설 배경" />
+  <div class="explanation-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-extrabold text-[43px] text-[#0a2c5d]">문제 해설</div>
       </div>
-      <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
-      <div id="judgement" class="mt-4 text-3xl font-bold"></div>
-      <div id="explanationText" class="explanation font-bold mt-2 px-4"></div>
+  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
+  <div id="judgement" class="mt-4 text-3xl font-bold"></div>
+  <div id="explanationText" class="explanation font-bold mt-2 px-4 text-[32px]"></div>
       <button class="next-btn mt-6 bg-gray-600 text-white px-4 py-2 rounded-md" onclick="nextQuestion()">다음</button>
-      <img class="bottom-img w-1/5 absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
+  <img class="bottom-img w-1/6 absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
     </section>
 
     <!-- Final -->
-  <section id="finalScreen" class="quiz-box fixed-frame hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full">
-      <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
-      <img src="serohyeong.png" class="w-2/3 max-w-[340px] mb-4" alt="마무리 이미지" />
+  <section id="finalScreen" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full">
+  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
+  <!-- final image reduced similarly -->
+  <img src="serohyeong.png" class="w-1/2 max-w-[352px] mb-4 mx-auto" alt="마무리 이미지" />
       <div id="finalResult" class="text-3xl font-extrabold"></div>
       <p class="text-xl font-bold text-blue-600">경상북도 이동편의시설 기술지원센터는</p>
       <p class="text-xl font-bold text-blue-600">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
       <button class="reset-btn mt-4 bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
     </section>
 
-    <!-- Admin Panel -->
-    <div id="adminPanel" class="hidden fixed right-3 bottom-3 w-80 bg-white border-2 border-blue-500 rounded shadow-lg z-50">
+  <!-- Admin Panel (absolute so it can be moved inside the blue frame) -->
+  <div id="adminPanel" class="hidden absolute right-3 bottom-3 w-80 bg-white border-2 border-blue-500 rounded shadow-lg z-50">
       <div class="flex items-center justify-between p-3 border-b">
         <strong class="text-sm">관리자 통계</strong>
         <button class="text-lg" onclick="document.getElementById('adminPanel').style.display='none'">✕</button>
@@ -229,8 +238,23 @@
     async function adminAuthAndShow(skipPrompt=false){
       if(!skipPrompt){ const pwd = prompt('관리자 비밀번호를 입력하세요'); if(!pwd) return; if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; } }
       if(!supabase || !supabase.from){ alert('supabase 설정이 없습니다.'); return; }
-      // attempt RPC then fallback - omitted for brevity in tailwind demo
-      try{ const panel = document.getElementById('adminPanel'); panel.querySelector('.content').textContent = '서버에서 통계를 불러오는 중...'; panel.style.display='block'; }catch(e){console.warn(e);}    
+      // Move the admin panel into the currently visible fixed-frame so it appears
+      // inside the blue bordered area rather than detached on the page.
+      try{
+        const panel = document.getElementById('adminPanel');
+        // find the currently visible frame (not hidden)
+        const frames = Array.from(document.querySelectorAll('.fixed-frame'));
+        const visible = frames.find(f => !f.classList.contains('hidden')) || frames[0] || document.querySelector('main');
+        if(visible && panel && panel.parentNode !== visible){
+          visible.appendChild(panel);
+        }
+        // show loading text and display the panel
+        const contentEl = panel.querySelector('.content');
+        if(contentEl) contentEl.textContent = '서버에서 통계를 불러오는 중...';
+        panel.classList.remove('hidden');
+      }catch(e){ console.warn('adminAuthAndShow error', e); }
+      // Note: RPC/data rendering is omitted in this demo version; full logic
+      // would follow the original file's behavior and populate panel.content.
     }
     async function showStats(){ adminAuthAndShow(); }
     async function resetStatistics(){ const pwd = prompt('관리자 비밀번호를 입력하세요'); if(!pwd) return; if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; } if(!confirm('정말 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return; if(!supabase || !supabase.from){ alert('supabase 설정이 없습니다.'); return; } try{ await supabase.rpc('reset_quiz_statistics', { p_quiz_id: 'ox_default_quiz' }); alert('초기화 요청 완료'); adminAuthAndShow(true); }catch(e){ alert('초기화 실패: '+e.message); }
