@@ -39,8 +39,6 @@
       /* use margin/padding for spacing instead of translate to keep flow predictable */
       margin-top: 20px;
     }
-      /* Make explanation blocks bold by default (replaces inline styles) */
-      .explanation { font-weight: bold; }
     .answer-buttons {
       display: flex;
       justify-content: space-evenly;
@@ -253,8 +251,7 @@
   /* Mobile: gentle nudge so the explanation label sits inside the yellow banner */
   @media (max-width: 767px) {
     .explanation-label {
-      /* move label up by 150px on mobile per request */
-      top: calc(50% - 150px);
+      top: 50%;
       left: 50%;
       /* requested mobile offset: ~+30px right, ~+5px down */
       transform: translate(calc(-50% + 30px), calc(-50% + 5px));
@@ -291,28 +288,7 @@
   .btn.o img, .btn.x img { width: 100%; height: 100%; max-width: 120px; max-height: 120px; object-fit: contain; }
     /* Question and explanation text scaled down for mobile */
     .question { font-size: 26px; line-height: 1.1; }
-  /* move explanation text up to match the banner shift so they stay visually aligned
-     Use transform instead of negative margin so the element's layout box doesn't
-     shrink and affect the flexbox centering (prevents the banner from appearing
-     to drop). Also add a rounded, subtly-striped banner texture using CSS so no
-     external asset is required. */
-  #explanationText {
-    font-size: 20px;
-    margin-top: 0; /* remove negative margin which alters layout */
-    transform: translateY(-150px);
-    position: relative;
-    z-index: 4;
-    padding: 12px 14px; /* replace inline padding */
-    /* subtle diagonal stripe banner texture + soft white backing */
-    background: repeating-linear-gradient(135deg, rgba(33,150,243,0.06) 0 6px, rgba(255,255,255,0) 6px 12px), linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.9));
-    border-radius: 16px; /* rounded rectangle */
-    border: 1px solid rgba(10,44,93,0.06);
-    box-shadow: 0 6px 18px rgba(10,44,93,0.06);
-    backdrop-filter: blur(2px);
-    text-align: center;
-    /* ensure long text wraps nicely inside rounded box */
-    word-break: keep-all;
-  }
+    #explanationText { font-size: 20px; }
   /* Reduce judgement and final result font sizes by ~50% on mobile per request */
   .judgement.correct, .judgement.wrong { font-size: 34px; }
   #finalResult { font-size: 34px; }
