@@ -162,6 +162,24 @@
   color: #0a2c5d;
 }
 </style>
+<!-- Mode-specific mobile styles: desktop unchanged, two phone modes via body class -->
+<style>
+  @media (max-width: 767px) {
+    /* 4:3-ish portrait phones (w/h >= ~0.656) */
+    body.mobile-4-3 .quiz-box { width: clamp(340px, 86vw, 380px); aspect-ratio: 4 / 3; padding: 12px; }
+    body.mobile-4-3 .quiz-image-wrap { max-width: 340px; }
+    body.mobile-4-3 .btn { width: 125px; height: 125px; font-size: 34px; border-radius: 12px; }
+
+    /* 16:9-ish portrait phones (w/h < ~0.656) — taller/narrower screens */
+    body.mobile-16-9 .quiz-box { width: clamp(320px, 86vw, 360px); aspect-ratio: 16 / 9; padding: 8px; }
+    body.mobile-16-9 .quiz-image-wrap { max-width: 320px; }
+    body.mobile-16-9 .btn { width: 110px; height: 110px; font-size: 32px; border-radius: 10px; }
+    /* hide decorative elements on taller 16:9 phones to reduce clutter */
+    body.mobile-16-9 .bottom-img,
+    body.mobile-16-9 #intro img[src$="퀴즈.png"],
+    body.mobile-16-9 #intro img[src$="garohyeong.png"] { display: none !important; }
+  }
+</style>
 <style>
   /* Desktop-specific layout tweaks to avoid buttons being covered and
      to make better use of horizontal space on wider screens. */
@@ -406,6 +424,30 @@
     }
     try{ window.__env_loaded = !!(window.__env); }catch(e){}
   }catch(e){/* ignore */}
+</script>
+<!-- Mobile mode detector: add body class mobile-4-3 or mobile-16-9 for finer control -->
+<script>
+  (function setMobileMode(){
+    function updateMode(){
+      try{
+        var w = window.innerWidth || document.documentElement.clientWidth;
+        var h = window.innerHeight || document.documentElement.clientHeight;
+        // remove previous classes
+        document.body.classList.remove('mobile-4-3','mobile-16-9');
+        // Only apply mobile classes when narrow
+        if(w <= 767){
+          var ar = (h > 0) ? (w / h) : 0;
+          // threshold roughly halfway between portrait 16:9 (≈0.5625) and 4:3 (0.75)
+          var threshold = 0.65625;
+          if(ar >= threshold) document.body.classList.add('mobile-4-3');
+          else document.body.classList.add('mobile-16-9');
+        }
+      }catch(e){console.warn('setMobileMode failed', e);}    
+    // run now and on changes
+    updateMode();
+    window.addEventListener('resize', updateMode);
+    window.addEventListener('orientationchange', updateMode);
+  })();
 </script>
 <script type="module">
   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
