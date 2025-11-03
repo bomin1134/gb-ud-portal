@@ -251,7 +251,8 @@
   /* Mobile: gentle nudge so the explanation label sits inside the yellow banner */
   @media (max-width: 767px) {
     .explanation-label {
-      top: 50%;
+      /* move label up by 150px on mobile per request */
+      top: calc(50% - 150px);
       left: 50%;
       /* requested mobile offset: ~+30px right, ~+5px down */
       transform: translate(calc(-50% + 30px), calc(-50% + 5px));
@@ -288,7 +289,8 @@
   .btn.o img, .btn.x img { width: 100%; height: 100%; max-width: 120px; max-height: 120px; object-fit: contain; }
     /* Question and explanation text scaled down for mobile */
     .question { font-size: 26px; line-height: 1.1; }
-    #explanationText { font-size: 20px; }
+  /* move explanation text up to match the banner shift so they stay visually aligned */
+  #explanationText { font-size: 20px; margin-top: -150px; }
   /* Reduce judgement and final result font sizes by ~50% on mobile per request */
   .judgement.correct, .judgement.wrong { font-size: 34px; }
   #finalResult { font-size: 34px; }
