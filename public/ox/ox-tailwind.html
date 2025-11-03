@@ -12,6 +12,15 @@
     body.mode-16-9 .quiz-box { aspect-ratio: 16 / 9; }
     /* image wrapper label adjustments (pixel fine-tuning can stay here) */
     .quiz-label { text-shadow: 0 1px 0 rgba(255,255,255,0.6); }
+    /* fixed frame used on all quiz screens so the blue border doesn't resize with content
+       - width/height are clamped for mobile and desktop
+       - content inside will scroll if it's too large */
+    .fixed-frame{
+      box-sizing: border-box;
+      width: clamp(320px, 86vw, 880px);
+      height: clamp(560px, 78vh, 800px);
+      overflow: auto;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-cover bg-center" style="background-image:url('색.png')">
@@ -39,7 +48,7 @@
 
   <!-- Intro -->
   <main class="max-w-3xl mx-auto px-4 py-8">
-    <section id="intro" class="quiz-box flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
+  <section id="intro" class="quiz-box fixed-frame flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
       <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
       <img class="mb-4 w-3/4 max-w-[520px]" src="garohyeong.png" alt="가로형 이미지" />
       <img class="mb-4 w-11/12 max-w-[680px]" src="퀴즈.png" alt="인트로 퀴즈" />
@@ -48,7 +57,7 @@
     </section>
 
     <!-- Quiz screen -->
-    <section id="quiz" class="quiz-box hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
+  <section id="quiz" class="quiz-box fixed-frame hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
       <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
       <div class="relative w-full max-w-[650px] mx-auto quiz-image-wrap">
         <img id="questionImage" class="w-full h-auto rounded" src="11번.png" alt="문제 배경" />
@@ -63,7 +72,7 @@
     </section>
 
     <!-- Explanation -->
-    <section id="explanationBox" class="quiz-box hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full relative">
+  <section id="explanationBox" class="quiz-box fixed-frame hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full relative">
       <div class="relative w-full max-w-[650px] mx-auto quiz-image-wrap">
         <img src="11번.png" class="w-full rounded" alt="해설 배경" />
         <div class="explanation-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-extrabold text-2xl text-[#0a2c5d]">문제 해설</div>
@@ -76,7 +85,7 @@
     </section>
 
     <!-- Final -->
-    <section id="finalScreen" class="quiz-box hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full">
+  <section id="finalScreen" class="quiz-box fixed-frame hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full">
       <img class="absolute top-4 right-4 h-16" src="제목 없음.png" alt="기관 로고" />
       <img src="serohyeong.png" class="w-2/3 max-w-[340px] mb-4" alt="마무리 이미지" />
       <div id="finalResult" class="text-3xl font-extrabold"></div>
@@ -153,9 +162,44 @@
 
     function startQuiz(){
       try{ submissionId = crypto.randomUUID(); }catch(e){ submissionId = 's_'+Date.now(); }
+      // Lock the visual frame to the intro size so foldables (e.g. Galaxy Fold)
+      // don't cause the blue border to resize when switching screens.
+      try{ lockFrameToIntro(); }catch(e){ console.warn('lockFrameToIntro failed', e); }
       document.getElementById('intro').classList.add('hidden');
       document.getElementById('quiz').classList.remove('hidden');
       loadQuestion();
+    }
+
+    // Measure the intro box and set explicit width/height on all .fixed-frame
+    // elements so the frame stays constant after the intro is hidden.
+    function lockFrameToIntro(){
+      const intro = document.getElementById('intro');
+      if(!intro) return;
+      // ensure intro is visible when measuring
+      const prevDisplay = intro.style.display;
+      intro.style.display = '';
+      const rect = intro.getBoundingClientRect();
+      // restore previous display (not strictly necessary here)
+      intro.style.display = prevDisplay;
+      const w = Math.max(200, Math.round(rect.width));
+      const h = Math.max(200, Math.round(rect.height));
+      document.querySelectorAll('.fixed-frame').forEach(el=>{
+        el.style.width = w + 'px';
+        el.style.height = h + 'px';
+        el.style.overflow = 'auto';
+      });
+      // remember locked state
+      document.body.setAttribute('data-frame-locked','1');
+    }
+
+    // Optional: remove inline locks to return to responsive clamps (not used by default)
+    function unlockFrame(){
+      document.querySelectorAll('.fixed-frame').forEach(el=>{
+        el.style.width = '';
+        el.style.height = '';
+        el.style.overflow = '';
+      });
+      document.body.removeAttribute('data-frame-locked');
     }
     function loadQuestion(){
       document.getElementById('quiz').classList.remove('hidden');
