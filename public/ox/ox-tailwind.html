@@ -272,85 +272,276 @@
 
     // admin basic functions (stubbed similarly to main file)
     const ADMIN_PASSWORD = '1111';
-    async function adminAuthAndShow(skipPrompt=false){
-      // auth
-      if(!skipPrompt){ const pwd = prompt('관리자 비밀번호를 입력하세요'); if(!pwd) return; if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; } }
+    async function adminAuthAndShow(skipPrompt = false){
+    if(!skipPrompt){
+      const pwd = prompt('관리자 비밀번호를 입력하세요');
+      if(!pwd) return;
+      if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+    }
+    // Supabase 클라이언트가 준비되어 있는지 확인
+    if(!supabase || typeof supabase.from !== 'function'){
+      alert('Supabase 설정이 없습니다. 서버에 public/env.js를 배치하거나 배포 환경에 Supabase 키를 설정해 주세요.');
+      console.warn('supabase not configured or invalid client', supabase);
+      return;
+    }
+    // 우선: Supabase 서버 측 RPC(get_quiz_statistics)를 사용해 집계 요청 (대량 데이터에 적합)
+    // 관리자는 Supabase SQL Editor에 아래 함수를 생성해야 합니다. (아래 안내 참고)
+    try{
+      // RPC 호출: 함수명이 get_quiz_statistics이고 파라미터 이름은 p_quiz_id입니다.
+      const { data, error } = await supabase.rpc('get_quiz_statistics', { p_quiz_id: quizId });
+      if(error){
+        console.warn('RPC get_quiz_statistics failed, falling back to client aggregation', error);
+        throw error;
+      }
 
-      // move panel into the currently visible frame and show it immediately with loading text
+      // data: array of rows per question with fields: question_index, count_o, count_x, total_responses, correct_rate, total_participants, avg_score
+      const panel = document.getElementById('adminPanel');
+      if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
+
+      const contentEl = panel.querySelector('.content');
+      if(!contentEl){ throw new Error('panel .content element missing'); }
+
+      // We'll use the RPC data for per-question counts, but compute the overall average
+      // from raw rows to ensure average = (sum of participant scores) / participant count.
+      // First derive per-question totals from RPC rows if present.
+      let totalParticipants = 0;
+      let totalResponses = 0;
+      if(Array.isArray(data) && data.length>0){
+        totalParticipants = data[0].total_participants || 0;
+        if(typeof data[0].total_responses !== 'undefined'){
+          const sumPerQuestion = data.reduce((s,r)=> s + (Number(r.total_responses)||0), 0);
+          totalResponses = Math.round(sumPerQuestion / Math.max(1, questions.length));
+        }
+      }
+
+      // Fetch raw rows to compute per-row participant scores (treat each response-row as a participant)
+      // This ensures average = participant-score-sum / participant-count.
+      let avgScoreDisplay = '0.00';
+      try{
+      // Do not request submission_id column directly because older DB schemas
+      // may not have it. Fetch meta (JSON) instead and read submission_id from
+      // meta if present.
+      const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id,meta').eq('quiz_id', quizId).limit(100000);
+        if(!rowsErr && Array.isArray(rows)){
+          totalResponses = rows.length;
+          // Group rows by session_id when available so a single participant's
+          // multiple answers (one per question) count as one participant.
+          const sessions = new Map();
+          let totalCorrectSum = 0;
+          // build per-question stats (counts and correct counts)
+          const perQuestionCorrect = Array(questions.length).fill(0).map(()=>0);
+          const perQuestionCounts = Array(questions.length).fill(0).map(()=>({ o:0, x:0, total:0 }));
+          for(const [i, r] of rows.entries()){
+            const qi = Number(r.question_index);
+            const ansRaw = r.answer;
+            const ans = String(ansRaw).toUpperCase();
+            // tally O/X counts
+            if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCounts.length){
+              if(ans === 'O' || ans === 'TRUE' || ans === 'T') perQuestionCounts[qi].o++;
+              else perQuestionCounts[qi].x++;
+              perQuestionCounts[qi].total++;
+            }
+            const correctBool = !!(questions[qi] && questions[qi].answer);
+            const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctBool) ? 1 : 0;
+            if(isCorrect) totalCorrectSum++;
+            if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCorrect.length && isCorrect) perQuestionCorrect[qi]++;
+
+            const sid = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
+            sessions.set(sid, (sessions.get(sid) || 0) + isCorrect);
+          }
+          const participantCount = sessions.size;
+          // Compute average as the mean of per-participant percentages so it
+          // matches the single-player percent shown on the final screen.
+          let sumParticipantPercent = 0;
+          for(const correctCount of sessions.values()){
+            const pPercent = (questions.length > 0) ? (correctCount / questions.length) * 100 : 0;
+            sumParticipantPercent += pPercent;
+          }
+          const avgPercent = (participantCount > 0) ? (sumParticipantPercent / participantCount) : 0;
+          avgScoreDisplay = avgPercent.toFixed(2);
+
+          // If we have the admin panel open already, prefer to display these
+          // per-question counts computed from raw rows rather than RPC values.
+          // We'll stash them on the panel element for the rendering logic below.
+          try{
+            const panel = document.getElementById('adminPanel');
+            if(panel){
+              panel._perQuestionCorrect = perQuestionCorrect;
+              panel._perQuestionCounts = perQuestionCounts;
+              panel._totalResponses = totalResponses;
+              panel._participantCount = participantCount;
+            }
+          }catch(e){/* ignore */}
+        }
+      }catch(e){ console.warn('failed to fetch rows for avg calc', e); }
+  // Choose displayParticipants: prefer computed participant count (from submission_id grouping)
+  // If the per-attempt participant count was computed and stored on the panel, use it.
+  const panelEl = document.getElementById('adminPanel');
+  const computedParticipantCount = panelEl && (typeof panelEl._participantCount === 'number') ? panelEl._participantCount : null;
+  const displayParticipants = (computedParticipantCount !== null) ? computedParticipantCount : (totalParticipants && totalParticipants > 0 ? totalParticipants : totalResponses);
+      let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
+        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants}</div>
+        <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
+        <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+
+      // Ensure we render rows for each question index in order
+      const rpcRows = Array.isArray(data) ? data.sort((a,b)=> (a.question_index||0)-(b.question_index||0)) : [];
+      // check if we computed per-question correct counts and counts from raw rows earlier
+      const panelPerQ = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCorrect ? p._perQuestionCorrect : null; }catch(e){return null;} })();
+      const panelPerCounts = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCounts ? p._perQuestionCounts : null; }catch(e){return null;} })();
+      for(let i=0;i<questions.length;i++){
+        const row = rpcRows.find(r=>Number(r.question_index)===i) || null;
+        let countO = 0, countX = 0, total = 0;
+        // Prefer per-question counts computed from raw rows when available
+        if(panelPerCounts && typeof panelPerCounts[i] !== 'undefined'){
+          countO = Number(panelPerCounts[i].o||0);
+          countX = Number(panelPerCounts[i].x||0);
+          total = Number(panelPerCounts[i].total||0);
+        }else{
+          countO = row ? Number(row.count_o||0) : 0;
+          countX = row ? Number(row.count_x||0) : 0;
+          total = row ? Number(row.total_responses||0) : 0;
+        }
+        // Prefer per-question correct counts from raw rows when available, otherwise fall back to RPC's correct_rate
+        let correctRate = 0;
+        if(panelPerQ && typeof panelPerQ[i] !== 'undefined' && total > 0){
+          correctRate = ((panelPerQ[i] / total) * 100);
+          correctRate = Number(correctRate).toFixed(2);
+        }else{
+          correctRate = row ? Number(row.correct_rate||0) : 0;
+        }
+        html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${countO} &nbsp; X=${countX} &nbsp; (총 ${total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
+      }
+      html += `</div>`;
+
+      contentEl.innerHTML = html;
+      panel.style.display = 'block';
+      panel.scrollIntoView({behavior:'smooth'});
+
+    }catch(rpcErr){
+      // RPC가 없거나 실패한 경우 기존 클라이언트 집계 방식(모든 행을 읽어 들여 집계)으로 폴백
+      try{
+        const { data, error } = await supabase.from('quiz_responses').select('*').eq('quiz_id', quizId).limit(100000);
+        if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
+        const agg = {};
+        // Build per-session scores. If a row lacks session_id, treat that row as its own participant
+        const perSessionScore = {};
+        for(const [i, r] of (data || []).entries()){
+          const qi = Number(r.question_index);
+          const ans = String(r.answer).toUpperCase();
+          if(!agg[qi]) agg[qi] = { O:0, X:0, total:0, correctCount:0 };
+          if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
+          else agg[qi].X++;
+          agg[qi].total++;
+
+          // Determine whether this response was correct by comparing to the
+          // authoritative answer in the `questions` array.
+          const correctAnswerIsO = !!(questions[qi] && questions[qi].answer);
+          const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0;
+          agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;
+
+          // Group by submission_id (from meta if necessary) then session_id so a
+          // single participant's answers across multiple questions count as
+          // one participant rather than being counted once per question.
+          const sessionKey = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
+          perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + isCorrect;
+        }
+
+        const participantIds = Object.keys(perSessionScore);
+        const totalParticipants = participantIds.length;
+        // sum of correct answers across participants
+        const totalCorrectSum = participantIds.length > 0 ? participantIds.reduce((acc, id) => acc + (perSessionScore[id]||0), 0) : 0;
+        // Average percent = (total correct across participants) / (participants * questions.length) * 100
+        const avgScorePercent = (totalParticipants > 0 && questions.length > 0) ? (totalCorrectSum / (totalParticipants * questions.length)) * 100 : 0;
+        const avgScoreDisplay = avgScorePercent.toFixed(2);
+
+        // total responses is simply the number of rows fetched
+        const totalResponses = Array.isArray(data) ? data.length : 0;
+
+        let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
+          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+          <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
+          <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+        for(let i=0;i<questions.length;i++){
+          const a = agg[i] || {O:0,X:0,total:0,correctCount:0};
+          // Use the counted correct responses if available. If not, fall back
+          // to interpreting O/X relative to the known correct answer.
+          const correctCount = (typeof a.correctCount !== 'undefined' && a.correctCount !== null)
+            ? a.correctCount
+            : (questions[i] && questions[i].answer ? a.O : a.X);
+          const correctRate = a.total ? ((correctCount / a.total) * 100).toFixed(2) : '0.00';
+          html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
+        }
+        html += `</div>`;
+
+        const panel = document.getElementById('adminPanel');
+        if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
+        const contentEl = panel.querySelector('.content');
+        if(!contentEl){ throw new Error('panel .content element missing'); }
+        contentEl.innerHTML = html;
+        panel.style.display = 'block';
+        panel.scrollIntoView({behavior:'smooth'});
+      }catch(e){ console.error(e); alert('오류'); }
+    }
+  }
+    async function showStats(){ adminAuthAndShow(); }
+    async function resetStatistics(){
+    const pwd = prompt('관리자 비밀번호를 입력하세요');
+    if(!pwd) return;
+    if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+    if(!confirm('정말 이 퀴즈의 모든 응답을 삭제하고 통계를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+
+    // 1) 우선 RPC 호출 시도
+    try{
+      // show progress in admin panel if present
       try{
         const panel = document.getElementById('adminPanel');
-        const frames = Array.from(document.querySelectorAll('.fixed-frame'));
-        const visible = frames.find(f => !f.classList.contains('hidden')) || frames[0] || document.querySelector('main');
-        if(visible && panel && panel.parentNode !== visible){ visible.appendChild(panel); }
-        const contentEl = panel.querySelector('.content');
-        if(contentEl) contentEl.textContent = '서버에서 통계를 불러오는 중...';
-        panel.classList.remove('hidden');
-
-        // helper rendering functions (small, safe fallbacks)
-        function renderDemoStats(){
-          // produce a simple demo summary using the local `questions` array
-          let total = Math.max(0, Math.round(Math.random()*50 + 20));
-          let html = '<div class="p-1 text-sm">(데모) 총 참여자 수: <strong>' + total + '</strong></div>';
-          html += '<table class="w-full text-sm mt-2 border-collapse">';
-          html += '<thead><tr class="text-left"><th>문항</th><th>O</th><th>X</th></tr></thead><tbody>';
-          for(let i=0;i<questions.length;i++){
-            const o = Math.round(Math.random()*(total));
-            const x = Math.max(0, total - o);
-            html += '<tr><td>#' + (i+1) + ' ' + (questions[i].text.length>20? questions[i].text.slice(0,20)+'…' : questions[i].text) + '</td><td>' + o + '</td><td>' + x + '</td></tr>';
-          }
-          html += '</tbody></table>';
-          return html;
-        }
-
-        // attempt to fetch real stats if supabase is configured; otherwise show demo
-        if(!supabase || !supabase.from){
-          if(contentEl) contentEl.innerHTML = '<div class="text-sm">Supabase 설정이 없습니다. 데모 통계를 표시합니다.</div>' + renderDemoStats();
-          return;
-        }
-
-        // try server RPC first, fall back to demo on error
-        try{
-          let rpcResult = null;
-          if(typeof supabase.rpc === 'function'){
-            rpcResult = await supabase.rpc('get_quiz_statistics', { p_quiz_id: 'ox_default_quiz' });
-            if(rpcResult && rpcResult.error) throw rpcResult.error;
-            // rpcResult.data shape depends on server impl; try to render sensible fields
-            const data = rpcResult.data || rpcResult;
-            if(!data){ throw new Error('empty-rpc-result'); }
-            // basic rendering when server returns array/object with per-question stats
-            try{
-              // if data is an object with question_stats array
-              if(Array.isArray(data.question_stats) || Array.isArray(data)){
-                const arr = Array.isArray(data.question_stats)? data.question_stats : data;
-                let html = '<div class="p-1 text-sm">서버 통계(최근)</div>';
-                html += '<table class="w-full text-sm mt-2 border-collapse"><thead><tr class="text-left"><th>문항</th><th>O</th><th>X</th></tr></thead><tbody>';
-                for(let i=0;i<arr.length;i++){
-                  const r = arr[i];
-                  const qidx = (r.question_index !== undefined)? r.question_index : i;
-                  const o = r.o_count ?? r.count_o ?? r.o ?? 0;
-                  const x = r.x_count ?? r.count_x ?? r.x ?? 0;
-                  const qtext = questions[qidx] ? (questions[qidx].text.length>24? questions[qidx].text.slice(0,24)+'…' : questions[qidx].text) : ('#' + (qidx+1));
-                  html += '<tr><td>#' + (qidx+1) + ' ' + qtext + '</td><td>' + o + '</td><td>' + x + '</td></tr>';
-                }
-                html += '</tbody></table>';
-                if(contentEl) contentEl.innerHTML = html;
-                return;
-              }
-            }catch(e){ console.warn('render rpc shape failed', e); }
-          }
-          // fallback to demo if we reached here
-          if(contentEl) contentEl.innerHTML = '<div class="text-sm">서버 통계를 처리할 수 없거나 결과가 예상과 다릅니다. 데모 통계를 표시합니다.</div>' + renderDemoStats();
-          return;
-        }catch(e){
-          console.warn('failed to load stats from server', e);
-          if(contentEl) contentEl.innerHTML = '<div class="text-sm">통계를 불러오지 못했습니다. 데모 통계를 표시합니다.</div>' + renderDemoStats();
-          return;
-        }
-
-      }catch(e){ console.warn('adminAuthAndShow error', e); }
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(RPC 호출)</div>';
+      }catch(e){/* ignore */}
+      const { data, error } = await supabase.rpc('reset_quiz_statistics', { p_quiz_id: quizId });
+      if(error){
+        console.error('RPC reset error', error, data);
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">RPC 실패: '+(error.message||JSON.stringify(error))+'</div>';
+        alert('RPC로 초기화하는데 실패했습니다:\n'+(error.message||JSON.stringify(error))+'\n폴백으로 삭제를 시도합니다. 콘솔을 확인하세요.');
+        throw error;
+      }
+      console.log('RPC reset success', data);
+      // show success in panel
+      try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (RPC)</div>'; }catch(e){}
+      alert('통계가 초기화되었습니다. (RPC)');
+      // 이미 초기화 권한을 확인했으므로 패스워드 재입력을 건너뛰고 패널을 갱신합니다.
+      try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after reset error', e); }
+      return;
+    }catch(e){
+      console.warn('RPC reset failed, falling back to client-side delete', e);
     }
-    async function showStats(){ adminAuthAndShow(); }
-    async function resetStatistics(){ const pwd = prompt('관리자 비밀번호를 입력하세요'); if(!pwd) return; if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; } if(!confirm('정말 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return; if(!supabase || !supabase.from){ alert('supabase 설정이 없습니다.'); return; } try{ await supabase.rpc('reset_quiz_statistics', { p_quiz_id: 'ox_default_quiz' }); alert('초기화 요청 완료'); adminAuthAndShow(true); }catch(e){ alert('초기화 실패: '+e.message); }
+
+    // 2) RPC가 없으면 클라이언트에서 삭제 시도 (주의: RLS에 따라 실패할 수 있음)
+    try{
+      try{
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(삭제 호출)</div>';
+      }catch(e){}
+      const { data, error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
+      if(error){
+        console.error('delete error', error, data);
+        const panel = document.getElementById('adminPanel');
+        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+        if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">삭제 실패: '+(error.message||JSON.stringify(error))+'</div>';
+        alert('초기화 실패: '+(error.message||JSON.stringify(error))+'\n브라우저 콘솔의 자세한 정보를 확인하세요.');
+        return;
+      }
+      console.log('delete success', data);
+      const deletedCount = Array.isArray(data) ? data.length : (data && data.count) ? data.count : '알 수 없음';
+      try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (삭제 방식) 삭제된 항목: '+deletedCount+'</div>'; }catch(e){}
+      alert('통계가 초기화되었습니다. (삭제 방식)');
+      // 패널을 재로딩하되 패스워드 프롬프트는 생략
+      try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after delete error', e); }
+    }catch(e){ console.error('reset error', e); alert('초기화 도중 오류가 발생했습니다. 서버 측에서 RPC(reset_quiz_statistics)를 만드는 것을 권장합니다.'); }
     }
 
     // expose for inline onclick
