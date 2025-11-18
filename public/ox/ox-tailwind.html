@@ -481,7 +481,15 @@
         contentEl.innerHTML = html;
         panel.style.display = 'block';
         panel.scrollIntoView({behavior:'smooth'});
-      }catch(e){ console.error(e); alert('오류'); }
+      }catch(e){
+        console.error('adminAuthAndShow error', e);
+        try{
+          const panel = document.getElementById('adminPanel');
+          const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+          if(contentEl) contentEl.innerHTML = '<div style="color:#a00;">오류: '+(e && e.message ? e.message : String(e))+'</div>' + '<pre style="white-space:pre-wrap; font-size:12px;">'+(e && e.stack ? e.stack : '')+'</pre>';
+        }catch(err){ console.error('failed to render admin error', err); }
+        alert('통계를 불러오는 중 오류가 발생했습니다. 개발자 콘솔을 확인하세요.');
+      }
     }
   }
     async function showStats(){ adminAuthAndShow(); }
