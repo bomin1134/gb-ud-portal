@@ -230,8 +230,9 @@
     // Preload sound effects (file paths: 정답.mp3, 오답.mp3)
     let soundCorrect = null, soundWrong = null;
     try{
-      soundCorrect = new Audio('정답.mp3'); soundCorrect.preload = 'auto';
-      soundWrong = new Audio('오답.mp3'); soundWrong.preload = 'auto';
+      // Use explicit relative paths so the browser loads files from /ox/
+      soundCorrect = new Audio('./정답.mp3'); soundCorrect.preload = 'auto';
+      soundWrong = new Audio('./오답.mp3'); soundWrong.preload = 'auto';
     }catch(e){ console.warn('audio preload failed', e); }
 
     async function submitAnswer(qIndex, ans){
