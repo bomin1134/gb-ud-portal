@@ -197,6 +197,10 @@
     let sessionId = localStorage.getItem('ox_session_id');
     if(!sessionId){ sessionId = crypto.randomUUID ? crypto.randomUUID() : 's_'+Date.now(); localStorage.setItem('ox_session_id', sessionId); }
 
+  // quiz id from querystring (QR에 quiz 파라미터 포함하세요)
+  const params = new URLSearchParams(location.search);
+  const quizId = params.get('quiz') || 'ox_default_quiz';
+
     async function submitAnswer(qIndex, ans){
       try{
         const payload = { quiz_id: 'ox_default_quiz', question_index: qIndex, answer: ans, session_id: sessionId, submission_id: submissionId, user_agent: navigator.userAgent, meta: { via:'tailwind' } };
