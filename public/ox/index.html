@@ -80,6 +80,12 @@
       window.addEventListener('resize', updateMode);
       window.addEventListener('orientationchange', updateMode);
     })();
+    // Ensure alignment runs once DOM is ready (positions may depend on image load)
+    document.addEventListener('DOMContentLoaded', function(){
+      try{ alignNextToReset(); }catch(e){}
+      // Also run after a short delay to allow fonts/images to settle
+      setTimeout(function(){ try{ alignNextToReset(); }catch(e){} }, 300);
+    });
   </script>
 
   <!-- Intro -->
@@ -122,7 +128,7 @@
   <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
   <div id="judgement" class="mt-4 text-3xl font-bold"></div>
   <div id="explanationText" class="explanation font-bold mt-2 px-4 text-[32px]"></div>
-      <button class="next-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="nextQuestion()">다음</button>
+  <button id="nextBtn" class="next-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="nextQuestion()">다음</button>
   <img class="bottom-img w-[42.25%] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
     </section>
 
@@ -134,7 +140,7 @@
         <div id="finalResult" class="text-3xl font-extrabold"></div>
         <p class="text-xl font-bold text-blue-600">경상북도 이동편의시설 기술지원센터는</p>
         <p class="text-xl font-bold text-blue-600">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
-        <button class="reset-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
+  <button id="resetBtn" class="reset-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
       </div>
   <!-- serohyeong moved to bottom-center inside the blue frame -->
   <img src="serohyeong.png" class="bottom-img w-1/2 max-w-[352px] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" alt="마무리 이미지" />
@@ -270,9 +276,39 @@
       judge.textContent = userAnswer === correct ? '정답입니다!' : '오답입니다!';
       judge.className = userAnswer === correct ? 'mt-4 text-3xl font-bold text-blue-600' : 'mt-4 text-3xl font-bold text-orange-500';
       document.getElementById('explanationText').innerHTML = questions[current].explanation;
+      try{ alignNextToReset(); }catch(e){}
     }
     function nextQuestion(){ current++; if(current < questions.length) loadQuestion(); else showFinal(); }
     function showFinal(){ document.getElementById('explanationBox').classList.add('hidden'); document.getElementById('finalScreen').classList.remove('hidden'); const percent = questions.length>0? Math.round((score/questions.length)*100):0; document.getElementById('finalResult').textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; }
+
+    // Align the '다음' button vertically with the '처음으로' button so their
+    // heights are consistent across screens. We compute the reset button's
+    // position and place the next button at the same vertical center inside
+    // the explanation box. This keeps visual alignment even on resized frames.
+    function alignNextToReset(){
+      try{
+        const reset = document.getElementById('resetBtn');
+        const next = document.getElementById('nextBtn');
+        const explanationBox = document.getElementById('explanationBox');
+        if(!reset || !next || !explanationBox) return;
+        // Ensure explanationBox has position: relative (it does via .fixed-frame)
+        const resetRect = reset.getBoundingClientRect();
+        const expRect = explanationBox.getBoundingClientRect();
+        // Compute the vertical center of the reset button relative to the explanation box
+        const resetCenterRelativeToExp = (resetRect.top + resetRect.height/2) - expRect.top;
+        // Now compute top offset for next button so its center matches reset center
+        const nextRect = next.getBoundingClientRect();
+        const desiredTop = resetCenterRelativeToExp - (nextRect.height/2);
+        // Apply absolute positioning inside explanationBox
+        next.style.position = 'absolute';
+        next.style.left = '50%';
+        next.style.transform = 'translate(-50%, 0)';
+        next.style.top = Math.max(8, Math.round(desiredTop)) + 'px';
+        next.style.zIndex = '30';
+      }catch(e){ console.warn('alignNextToReset failed', e); }
+    }
+    // Recalculate on resize so alignment persists across orientation changes
+    window.addEventListener('resize', function(){ try{ alignNextToReset(); }catch(e){} });
 
     // admin basic functions (stubbed similarly to main file)
     const ADMIN_PASSWORD = '1111';
