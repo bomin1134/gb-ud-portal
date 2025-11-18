@@ -286,24 +286,21 @@
     // position and place the next button at the same vertical center inside
     // the explanation box. This keeps visual alignment even on resized frames.
     function alignNextToReset(){
+      // Simpler, more robust approach: pin the Next button a fixed distance from
+      // the bottom of the explanation box so it visually lines up with the
+      // reset button's expected position (near the bottom) across screens.
       try{
-        const reset = document.getElementById('resetBtn');
         const next = document.getElementById('nextBtn');
         const explanationBox = document.getElementById('explanationBox');
-        if(!reset || !next || !explanationBox) return;
-        // Ensure explanationBox has position: relative (it does via .fixed-frame)
-        const resetRect = reset.getBoundingClientRect();
-        const expRect = explanationBox.getBoundingClientRect();
-        // Compute the vertical center of the reset button relative to the explanation box
-        const resetCenterRelativeToExp = (resetRect.top + resetRect.height/2) - expRect.top;
-        // Now compute top offset for next button so its center matches reset center
-        const nextRect = next.getBoundingClientRect();
-        const desiredTop = resetCenterRelativeToExp - (nextRect.height/2);
-        // Apply absolute positioning inside explanationBox
+        if(!next || !explanationBox) return;
+        // Place Next absolutely and pin to bottom with a small margin.
         next.style.position = 'absolute';
         next.style.left = '50%';
         next.style.transform = 'translate(-50%, 0)';
-        next.style.top = Math.max(8, Math.round(desiredTop)) + 'px';
+        // 36px bottom gives consistent visual alignment across devices
+        next.style.bottom = '36px';
+        // ensure top is unset to avoid conflicts
+        next.style.top = '';
         next.style.zIndex = '30';
       }catch(e){ console.warn('alignNextToReset failed', e); }
     }
