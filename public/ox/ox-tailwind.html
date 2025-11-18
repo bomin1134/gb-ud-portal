@@ -202,10 +202,11 @@
   const quizId = params.get('quiz') || 'ox_default_quiz';
 
     // Preload sound effects (file paths inside /ox/ folder)
-    let soundCorrect = null, soundWrong = null;
+    let soundCorrect = null, soundWrong = null, soundStart = null;
     try{
       soundCorrect = new Audio('./정답.mp3'); soundCorrect.preload = 'auto';
       soundWrong = new Audio('./오답.mp3'); soundWrong.preload = 'auto';
+      soundStart = new Audio('./시작.mp3'); soundStart.preload = 'auto';
     }catch(e){ console.warn('audio preload failed', e); }
 
     async function submitAnswer(qIndex, ans){
@@ -220,6 +221,10 @@
     }
 
     function startQuiz(){
+      // play start sound (user click)
+      try{
+        if(soundStart && typeof soundStart.play === 'function'){ soundStart.currentTime = 0; soundStart.play().catch(()=>{}); }
+      }catch(e){ console.warn('start sound play failed', e); }
       try{ submissionId = crypto.randomUUID(); }catch(e){ submissionId = 's_'+Date.now(); }
       // Lock the visual frame to the intro size so foldables (e.g. Galaxy Fold)
       // don't cause the blue border to resize when switching screens.
