@@ -238,6 +238,29 @@
       soundBgm = new Audio('./브금.mp3'); soundBgm.preload = 'auto'; soundBgm.loop = true; soundBgm.volume = 0.25;
     }catch(e){ console.warn('audio preload failed', e); }
 
+    // Attempt to start BGM as early as possible (may be blocked by autoplay policies).
+    // If autoplay is blocked, start on the first user gesture so the intro also
+    // plays music before the quiz begins. startQuiz() still explicitly plays
+    // the start sound and will also play the BGM if it's not already playing.
+    (function(){
+      if(!soundBgm) return;
+      // Try to play immediately. If the returned promise rejects (autoplay
+      // blocked), register one-time gesture listeners to start the BGM on
+      // the user's first interaction.
+      try{
+        const p = soundBgm.play();
+        if(p && typeof p.catch === 'function'){
+          p.catch(()=>{
+            const startOnGesture = function(){ try{ soundBgm.currentTime = 0; soundBgm.play().catch(()=>{}); }catch(e){} };
+            ['click','touchstart','keydown','pointerdown'].forEach(ev=>document.addEventListener(ev, startOnGesture, { once: true, passive: true }));
+          });
+        }
+      }catch(e){
+        const startOnGesture = function(){ try{ soundBgm.currentTime = 0; soundBgm.play().catch(()=>{}); }catch(e){} };
+        ['click','touchstart','keydown','pointerdown'].forEach(ev=>document.addEventListener(ev, startOnGesture, { once: true, passive: true }));
+      }
+    })();
+
     async function submitAnswer(qIndex, ans){
       try{
         // Use the runtime quizId (from querystring) so submissions match the
@@ -342,14 +365,9 @@
     function nextQuestion(){ current++; if(current < questions.length) loadQuestion(); else showFinal(); }
     function showFinal(){ document.getElementById('explanationBox').classList.add('hidden'); document.getElementById('finalScreen').classList.remove('hidden'); const percent = questions.length>0? Math.round((score/questions.length)*100):0; document.getElementById('finalResult').textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; }
 
-    // stop bgm when showing final screen
-    (function(){
-      const origShowFinal = showFinal;
-      showFinal = function(){
-        try{ if(soundBgm){ soundBgm.pause(); soundBgm.currentTime = 0; } }catch(e){console.warn('bgm stop failed', e);}        
-        return origShowFinal.apply(this, arguments);
-      };
-    })();
+    // NOTE: BGM intentionally continues through the final screen so music
+    // plays from intro -> final. Previously the final handler stopped the
+    // music; that's removed so the audio experience is continuous.
 
     // Align the '다음' button vertically with the '처음으로' button so their
     // heights are consistent across screens. We compute the reset button's
