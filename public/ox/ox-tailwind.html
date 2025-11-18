@@ -273,25 +273,81 @@
     // admin basic functions (stubbed similarly to main file)
     const ADMIN_PASSWORD = '1111';
     async function adminAuthAndShow(skipPrompt=false){
+      // auth
       if(!skipPrompt){ const pwd = prompt('관리자 비밀번호를 입력하세요'); if(!pwd) return; if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; } }
-      if(!supabase || !supabase.from){ alert('supabase 설정이 없습니다.'); return; }
-      // Move the admin panel into the currently visible fixed-frame so it appears
-      // inside the blue bordered area rather than detached on the page.
+
+      // move panel into the currently visible frame and show it immediately with loading text
       try{
         const panel = document.getElementById('adminPanel');
-        // find the currently visible frame (not hidden)
         const frames = Array.from(document.querySelectorAll('.fixed-frame'));
         const visible = frames.find(f => !f.classList.contains('hidden')) || frames[0] || document.querySelector('main');
-        if(visible && panel && panel.parentNode !== visible){
-          visible.appendChild(panel);
-        }
-        // show loading text and display the panel
+        if(visible && panel && panel.parentNode !== visible){ visible.appendChild(panel); }
         const contentEl = panel.querySelector('.content');
         if(contentEl) contentEl.textContent = '서버에서 통계를 불러오는 중...';
         panel.classList.remove('hidden');
+
+        // helper rendering functions (small, safe fallbacks)
+        function renderDemoStats(){
+          // produce a simple demo summary using the local `questions` array
+          let total = Math.max(0, Math.round(Math.random()*50 + 20));
+          let html = '<div class="p-1 text-sm">(데모) 총 참여자 수: <strong>' + total + '</strong></div>';
+          html += '<table class="w-full text-sm mt-2 border-collapse">';
+          html += '<thead><tr class="text-left"><th>문항</th><th>O</th><th>X</th></tr></thead><tbody>';
+          for(let i=0;i<questions.length;i++){
+            const o = Math.round(Math.random()*(total));
+            const x = Math.max(0, total - o);
+            html += '<tr><td>#' + (i+1) + ' ' + (questions[i].text.length>20? questions[i].text.slice(0,20)+'…' : questions[i].text) + '</td><td>' + o + '</td><td>' + x + '</td></tr>';
+          }
+          html += '</tbody></table>';
+          return html;
+        }
+
+        // attempt to fetch real stats if supabase is configured; otherwise show demo
+        if(!supabase || !supabase.from){
+          if(contentEl) contentEl.innerHTML = '<div class="text-sm">Supabase 설정이 없습니다. 데모 통계를 표시합니다.</div>' + renderDemoStats();
+          return;
+        }
+
+        // try server RPC first, fall back to demo on error
+        try{
+          let rpcResult = null;
+          if(typeof supabase.rpc === 'function'){
+            rpcResult = await supabase.rpc('get_quiz_statistics', { p_quiz_id: 'ox_default_quiz' });
+            if(rpcResult && rpcResult.error) throw rpcResult.error;
+            // rpcResult.data shape depends on server impl; try to render sensible fields
+            const data = rpcResult.data || rpcResult;
+            if(!data){ throw new Error('empty-rpc-result'); }
+            // basic rendering when server returns array/object with per-question stats
+            try{
+              // if data is an object with question_stats array
+              if(Array.isArray(data.question_stats) || Array.isArray(data)){
+                const arr = Array.isArray(data.question_stats)? data.question_stats : data;
+                let html = '<div class="p-1 text-sm">서버 통계(최근)</div>';
+                html += '<table class="w-full text-sm mt-2 border-collapse"><thead><tr class="text-left"><th>문항</th><th>O</th><th>X</th></tr></thead><tbody>';
+                for(let i=0;i<arr.length;i++){
+                  const r = arr[i];
+                  const qidx = (r.question_index !== undefined)? r.question_index : i;
+                  const o = r.o_count ?? r.count_o ?? r.o ?? 0;
+                  const x = r.x_count ?? r.count_x ?? r.x ?? 0;
+                  const qtext = questions[qidx] ? (questions[qidx].text.length>24? questions[qidx].text.slice(0,24)+'…' : questions[qidx].text) : ('#' + (qidx+1));
+                  html += '<tr><td>#' + (qidx+1) + ' ' + qtext + '</td><td>' + o + '</td><td>' + x + '</td></tr>';
+                }
+                html += '</tbody></table>';
+                if(contentEl) contentEl.innerHTML = html;
+                return;
+              }
+            }catch(e){ console.warn('render rpc shape failed', e); }
+          }
+          // fallback to demo if we reached here
+          if(contentEl) contentEl.innerHTML = '<div class="text-sm">서버 통계를 처리할 수 없거나 결과가 예상과 다릅니다. 데모 통계를 표시합니다.</div>' + renderDemoStats();
+          return;
+        }catch(e){
+          console.warn('failed to load stats from server', e);
+          if(contentEl) contentEl.innerHTML = '<div class="text-sm">통계를 불러오지 못했습니다. 데모 통계를 표시합니다.</div>' + renderDemoStats();
+          return;
+        }
+
       }catch(e){ console.warn('adminAuthAndShow error', e); }
-      // Note: RPC/data rendering is omitted in this demo version; full logic
-      // would follow the original file's behavior and populate panel.content.
     }
     async function showStats(){ adminAuthAndShow(); }
     async function resetStatistics(){ const pwd = prompt('관리자 비밀번호를 입력하세요'); if(!pwd) return; if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; } if(!confirm('정말 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return; if(!supabase || !supabase.from){ alert('supabase 설정이 없습니다.'); return; } try{ await supabase.rpc('reset_quiz_statistics', { p_quiz_id: 'ox_default_quiz' }); alert('초기화 요청 완료'); adminAuthAndShow(true); }catch(e){ alert('초기화 실패: '+e.message); }
