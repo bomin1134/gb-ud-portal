@@ -9,8 +9,8 @@
   <style>
     /* reduce base font-size to ~75% of the default to make all text smaller */
     body { font-size: 75%; }
-    /* reduce question and explanation body text by 20% (80% of current size) */
-    #question, #explanationText { font-size: 110% !important; }
+  /* set question and explanation text to 24pt as requested */
+  #question, #explanationText { font-size: 24pt !important; }
     /* small helpers for mode classes applied by JS */
     body.mode-4-3 .quiz-box { aspect-ratio: 4 / 3; }
     body.mode-16-9 .quiz-box { aspect-ratio: 16 / 9; }
@@ -58,8 +58,8 @@
   <main class="max-w-3xl mx-auto px-4 py-8">
   <section id="intro" class="quiz-box fixed-frame relative flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
   <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-  <!-- reduced banner sizes (~33% of previous) -->
-  <img class="mb-4 w-1/3 max-w-[260px]" src="garohyeong.png" alt="가로형 이미지" />
+  <!-- moved garohyeong to the bottom to match other pages -->
+  <img class="bottom-img w-1/4 absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
   <!-- '퀴즈' scaled by 250%: w-1/3 (≈33.33%) *2.5 = ≈83.33% => w-5/6; max-w 260px *2.5 = 650px -->
   <img class="mb-4 w-5/6 max-w-[650px]" src="퀴즈.png" alt="인트로 퀴즈" />
   <button class="start-btn bg-indigo-600 text-white px-6 py-3 rounded-md text-lg font-bold" onclick="startQuiz()">시작</button>
