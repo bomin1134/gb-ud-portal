@@ -50,6 +50,13 @@
       justify-content: center;
       margin-top: 0.5rem;
     }
+    /* make the explanation '다음' button longer by increasing horizontal padding 1.8x
+       we override Tailwind's px-4 with a calc-based padding for left/right so
+       the button visually extends without scaling text size */
+    .next-btn{
+      padding-left: calc(1rem * 1.8) !important;
+      padding-right: calc(1rem * 1.8) !important;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-cover bg-center" style="background-image:url('색.png')">
