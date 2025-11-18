@@ -297,8 +297,9 @@
         next.style.position = 'absolute';
         next.style.left = '50%';
         next.style.transform = 'translate(-50%, 0)';
-        // 36px bottom gives consistent visual alignment across devices
-        next.style.bottom = '36px';
+  // 60px bottom gives a higher vertical offset so the Next button
+  // sits further up inside the explanation box (adjustable)
+  next.style.bottom = '60px';
         // ensure top is unset to avoid conflicts
         next.style.top = '';
         next.style.zIndex = '30';
