@@ -18,171 +18,453 @@
     .quiz-label { text-shadow: 0 1px 0 rgba(255,255,255,0.6); }
     /* site logo: keep the '제목 없음' logo identical on every screen */
     .site-logo{ position: absolute; top: 1rem; right: 1rem; height: 28px; }
-  /* remove visual shadows around buttons inside the quiz frame */
-  .fixed-frame button { box-shadow: none !important; }
-    /* fixed frame used on all quiz screens so the blue border doesn't resize with content
-       - width/height are clamped for mobile and desktop
-       - content inside will scroll if it's too large */
-    .fixed-frame{
-      box-sizing: border-box;
-      width: clamp(320px, 86vw, 880px);
-      height: clamp(560px, 78vh, 800px);
-      overflow: auto;
-    }
-    /* center the final-screen main text block (vertically + horizontally) */
-    .final-center{
+  <!DOCTYPE html>
+
+  <html lang="ko">
+  <head>
+  <meta charset="utf-8"/>
+    <!-- Ensure responsive behavior: without this, mobile browsers use a desktop viewport
+         and CSS media queries (max-width/min-width) won't match as expected. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OX 퀴즈</title>
+  <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: 'Malgun Gothic', sans-serif;
+        background-image: url('색.png');
+        background-size: cover;
+      }
+      .quiz-box {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 80vh;
+        text-align: center;
+        position: relative;
+        border: 8px solid #2196f3;
+        background-color: white;
+        border-radius: 20px;
+        box-sizing: border-box;
+        padding: 20px;
+        max-width: 90%;
+        margin: 5vh auto;
+      }
+      .question {
+        max-width: 800px;
+        width: 100%;
+        word-break: keep-all;
+        /* use margin/padding for spacing instead of translate to keep flow predictable */
+        margin-top: 20px;
+      }
+      .answer-buttons {
+        display: flex;
+        justify-content: space-evenly;
+        gap: 50px;
+        width: 100%;
+        padding: 0 10px;
+        margin-top: 60px;
+        margin-bottom: 60px;
+        box-sizing: border-box;
+      }
+      .btn {
+        width: 67.5vw;
+        height: 67.5vw;
+        max-width: 262.5px;
+        max-height: 262.5px;
+        font-size: 12vw;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+      }
+      .btn.o, .btn.x {
+        background-color: transparent;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .btn.o img, .btn.x img {
+        width: 350px;
+        height: 350px;
+        object-fit: contain;
+        max-width: 40vw;
+      }
+      .btn.next, .btn.stats, .btn.reset {
+        font-size: 35px;
+        padding: 4px 8px;
+        background-color: #607d8b;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        height: 88px;
+        line-height: 1.2;
+        margin-top: 20px;
+      }
+      .judgement.correct {
+        color: #2196f3;
+        font-size: 68px;
+        font-weight: bold;
+      }
+      .judgement.wrong {
+        color: #ff9800;
+        font-size: 68px;
+        font-weight: bold;
+      }
+      #finalScreen img {
+        width: 507px;
+        margin-bottom: 20px;
+      }
+      .bottom-img {
+        width: 60%;
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        pointer-events: none; /* don't block buttons on desktop */
+      }
+
+  .topright-logo {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    height: 72px;
+  }
+  /* Image wrapper: make the image a predictable reference for absolute labels */
+  .quiz-image-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 650px; /* default max; media queries may override */
+    margin: 0 auto;
+  }
+  .quiz-image-wrap img { display:block; width:100%; height:auto; }
+
+  /* Center the label horizontally and vertically inside the image wrapper.
+     Use translate(-50%, -50%) so the label stays centered regardless of image size.
+     Font-size is responsive using clamp so it won't overflow the banner. */
+  #quizLabel {
+    position: absolute;
+    /* move up 15px to align with explanation label adjustments */
+    top: calc(50% - 10px);
+    /* shift label 50px left relative to previous center offset (was -20px -> now -70px) */
+    left: calc(50% - 0px) !important;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    pointer-events: none;
+    font-family: 'Arial Black', 'Malgun Gothic', sans-serif;
+    font-weight: 700;
+    white-space: nowrap;
+    font-size: clamp(28px, 4.5vw, 44px);
+    color: #0a2c5d;
+  }
+
+  /* Explanation label used on the explanation screen */
+  .explanation-label {
       position: absolute;
-      left: 50%;
-      top: 50%;
+      /* move up 15px relative to the centered position */
+      top: calc(50% - 15px);
+      /* shift explanation label 50px further left (was -20px -> now -70px) */
+      left: calc(50% - 40px) !important;
       transform: translate(-50%, -50%);
-      width: calc(100% - 3rem);
-      text-align: center;
-      z-index: 10;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    /* final screen button in normal flow under the centered block */
-    .final-button{
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 0.5rem;
-    }
-    /* make the explanation '다음' button longer by increasing horizontal padding 1.8x
-       we override Tailwind's px-4 with a calc-based padding for left/right so
-       the button visually extends without scaling text size */
-    .next-btn{
-      padding-left: calc(1rem * 1.8) !important;
-      padding-right: calc(1rem * 1.8) !important;
+    z-index: 2;
+    pointer-events: none;
+    font-family: 'Arial Black', 'Malgun Gothic', sans-serif;
+    font-weight: 700;
+    white-space: nowrap;
+    font-size: clamp(28px, 4.5vw, 40px);
+    color: #0a2c5d;
+  }
+  </style>
+  <style>
+    /* Desktop-specific layout tweaks to avoid buttons being covered and
+       to make better use of horizontal space on wider screens. */
+    @media (min-width: 1024px) {
+      .quiz-box {
+        max-width: 880px;
+        height: 80vh;
+        padding: 20px 28px; /* tighten padding so content has more space */
+        padding-top: 48px; /* allow room for header/logo */
+        box-sizing: border-box;
+        overflow: visible; /* allow controls to sit above decorative images */
+      }
+      .question { font-size: 30px; line-height:1.15; }
+      /* Move the quiz label higher (closer to top of the background image) and reduce size so it doesn't overlap header */
+    #quizLabel { font-size: 34px !important; }
+    /* keep the wrapper centered; nudge only the image by 3px so the visible
+       yellow banner shifts right while the centered label remains fixed */
+    .quiz-image-wrap { transform: none; }
+    .quiz-image-wrap img { transform: translateX(100px); }
+      .answer-buttons { gap: 64px; }
+      .btn {
+        width: 160px;
+        height: 160px;
+        max-width: none;
+        max-height: none;
+        font-size: 36px;
+        border-radius: 50%;
+      }
+      .btn.o img, .btn.x img { width: 160px; height: 160px; }
+      .btn.next, .btn.stats, .btn.reset {
+        font-size: 18px;
+        height: 52px;
+        padding: 8px 14px;
+        border-radius: 8px;
+      }
+      .btn.next { z-index: 20; position: relative; }
+      .judgement.correct, .judgement.wrong { font-size: 60px; }
+    /* final screen image smaller so text below is visible */
+    #finalScreen img { width: 300px !important; height: auto !important; }
+      /* reduce decorative images on desktop so they don't dominate the layout */
+      /* override some inline widths with !important to ensure effect */
+    #questionImage { width: 320px !important; height: auto !important; }
+    #intro img:not(.topright-logo) { width: 46% !important; max-width: 520px; }
+    .bottom-img { width: 18%; bottom: 18px; }
+      /* logo slightly smaller on desktop to free vertical space */
+      .topright-logo { height: 40px; }
+      /* slightly reduce prominent text sizes on desktop */
+    .question { font-size: 28px !important; }
+    .judgement.correct, .judgement.wrong { font-size: 44px !important; }
+    #finalResult { font-size: 40px !important; }
+
+    /* override inline-large quiz label and explanation text and images */
+    #quizLabel { font-size: 34px !important; }
+    /* explanation background image and label */
+    #explanationBox > div > img { width: 320px !important; height: auto !important; }
+    /* nudge the explanation label left 50px and up 15px on desktop
+      (preserve the existing transform behavior while offsetting position) */
+    #explanationBox > div > div { font-size: 32px !important; top: calc(48% - 15px) !important; left: calc(55% - 30px) !important; transform: translateX(-50%) translateY(0) !important; }
+    /* ensure the explanation text block that follows the image fits */
+    #explanationText { font-size: 30px !important; }
+    /* shrink final screen paragraphs so they stay inside the bordered box */
+    #finalScreen p { font-size: 26px !important; }
     }
   </style>
-</head>
-<body class="min-h-screen bg-cover bg-center" style="background-image:url('색.png')">
-  <!-- Simple mobile mode detector to toggle .mode-4-3 or .mode-16-9 on body -->
-  <script>
-    (function(){
-      function updateMode(){
-        try{
-          var w = window.innerWidth || document.documentElement.clientWidth;
-          var h = window.innerHeight || document.documentElement.clientHeight;
-          document.body.classList.remove('mode-4-3','mode-16-9');
-          if(w <= 767){
-            var ar = (h > 0) ? (w / h) : 0;
-            var threshold = 0.65625;
-            if(ar >= threshold) document.body.classList.add('mode-4-3');
-            else document.body.classList.add('mode-16-9');
-          }
-        }catch(e){ console.warn(e); }
+  <!-- Large-desktop (≈1920×1080) tuning -->
+  <style>
+    @media (min-width: 1600px) {
+    .quiz-box { max-width: 1000px; padding-top: 40px; }
+    #questionImage { width: 460px !important; height: auto !important; }
+    /* keep label centered via .quiz-image-wrap; just increase font-size for large screens */
+    #quizLabel { font-size: 44px !important; line-height: 1 !important; }
+    #explanationBox > div > img { width: 460px !important; height: auto !important; }
+    .explanation-label { font-size: 40px !important; line-height: 1 !important; }
+    /* keep the wrapper centered on large desktop as well; a small 3px image
+      nudge is enough to move the visible yellow banner */
+    .quiz-image-wrap { transform: none; }
+    .quiz-image-wrap img { transform: translateX(100px); }
+    #finalScreen img { width: 340px !important; height: auto !important; }
+    #finalResult { font-size: 44px !important; }
+    #finalScreen p { font-size: 28px !important; }
+    .btn { width: 180px; height: 180px; font-size: 40px; }
+    .btn.o img, .btn.x img { width: 180px; height: 180px; }
+  }
+  </style>
+  <!-- Mobile tweaks -->
+  <style>
+    /* Mobile: gentle nudge so the explanation label sits inside the yellow banner */
+    @media (max-width: 767px) {
+      .explanation-label {
+        top: 50%;
+        left: 50%;
+        /* requested mobile offset: ~+30px right, ~+5px down */
+        transform: translate(calc(-50% + 30px), calc(-50% + 5px));
+        font-size: clamp(20px, 6.5vw, 32px);
+        outline: none;
+        z-index: 3;
       }
-      updateMode();
-      window.addEventListener('resize', updateMode);
-      window.addEventListener('orientationchange', updateMode);
-    })();
-  </script>
+      /* Consistent blue frame: fixed aspect-ratio + clamped width so the
+         border/frame size remains the same across phone models. Uses 9/16
+         portrait ratio which matches the visual samples. */
+      .quiz-box {
+        width: clamp(320px, 86vw, 360px);
+        aspect-ratio: 9 / 16;
+        max-width: 92%;
+        margin: 4vh auto;
+        padding: 12px;
+        box-sizing: border-box;
+        overflow: hidden;
+        border-width: 8px; /* keep the blue border consistent */
+      }
+      /* Mobile-specific size tuning: reduce images and text to fit the blue frame */
+      .quiz-box {
+        padding: 12px;
+        margin: 4vh auto;
+        height: auto;
+        max-width: 92%;
+      }
+      .quiz-image-wrap { max-width: 320px; }
+      .quiz-image-wrap img, #questionImage { width: 100%; height: auto; max-width: 320px; }
+      /* Keep button sizes as-is (user requested), but make the contained images scale down */
+    /* Button layout: constrain button outer size on mobile so they fit the frame */
+    .answer-buttons { gap: 28px; padding: 0 8px; }
+    .btn { width: 120px; height: 120px; font-size: 36px; border-radius: 12px; }
+    .btn.o img, .btn.x img { width: 100%; height: 100%; max-width: 120px; max-height: 120px; object-fit: contain; }
+      /* Question and explanation text scaled down for mobile */
+      .question { font-size: 26px; line-height: 1.1; }
+      #explanationText { font-size: 20px; }
+    /* Reduce judgement and final result font sizes by ~50% on mobile per request */
+    .judgement.correct, .judgement.wrong { font-size: 34px; }
+    #finalResult { font-size: 34px; }
+      /* Final screen adjustments for mobile readability */
+      #finalResult { font-size: 36px; }
+      #finalScreen p { font-size: 20px !important; }
+      .bottom-img { width: 28%; bottom: 12px; }
+      /* Reduce sizes of various decorative and header images so they don't dominate mobile frame */
+      .topright-logo { height: 32px; }
+      /* Intro images (large header/hero) and other full-width images */
+      #intro img:not(.topright-logo), .quiz-box > img, .quiz-box img[src$="퀴즈.png"] { max-width: 260px; width: 80%; height: auto; }
+      /* Final screen main image (serohyeong) */
+      #finalScreen img { max-width: 240px; width: 70%; height: auto; }
 
-  <!-- Intro -->
-  <main class="max-w-3xl mx-auto px-4 py-8">
-  <section id="intro" class="quiz-box fixed-frame relative flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
-  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-  <!-- moved garohyeong to the bottom to match other pages -->
-  <img class="bottom-img w-[32.5%] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
-  <!-- '퀴즈' scaled by 250%: w-1/3 (≈33.33%) *2.5 = ≈83.33% => w-5/6; max-w 260px *2.5 = 650px -->
-  <img class="mb-4 w-5/6 max-w-[650px]" src="퀴즈.png" alt="인트로 퀴즈" />
-  <button class="start-btn bg-indigo-600 text-white px-6 py-3 rounded-md text-lg font-bold" onclick="startQuiz()">시작</button>
-      <button class="btn-stats absolute right-4 bottom-4 bg-gray-600 text-white px-3 py-1 rounded-md text-sm" onclick="showStats()">📊 통계 보기</button>
-    </section>
+      /* Reduce the footprint of the control buttons like '다음' and '처음으로' on mobile */
+      .btn.next, .btn.reset {
+        /* halve the 'next' / 'reset' button footprint on mobile (base)
+           we'll enlarge .btn.next specifically below by +70% as requested */
+        width: auto;
+        min-width: 60px;
+        height: 27px;
+        padding: 4px 7px;
+        font-size: 9px;
+        border-radius: 6px;
+        line-height: 1.1;
+      }
+      /* Increase the visual footprint of the primary '다음' button by ~70% on mobile */
+      .btn.next {
+        min-width: 102px; /* 60px * 1.7 ≈ 102px */
+        height: 46px;     /* 27px * 1.7 ≈ 45.9px */
+        padding: 6px 12px;
+        font-size: 15px;
+        border-radius: 8px;
+      }
+      /* Ensure the intro stats button fits */
+      .btn.stats { min-width: 110px; height: 44px; padding: 6px 10px; font-size: 16px; }
+      /* --- User-requested tweaks: start button +30%, stats button 50%, halve some images, halve final-result font --- */
+      /* Increase only the START button inside #intro by ~30% (don't affect other .btn.next instances) */
+      #intro .btn.next {
+        min-width: 104px; /* 80px -> ~104px (approx +30% from previously set 80) */
+        height: 47px;     /* 36px -> ~47px */
+        font-size: 16px;
+        padding: 8px 16px;
+      }
+      /* Halve the visible footprint of the stats button */
+      .btn.stats {
+        min-width: 55px;
+        height: 22px;
+        padding: 4px 6px;
+        font-size: 8px;
+      }
+      /* Halve sizes for '제목 없음' (topright-logo) and garohyeong images */
+      .topright-logo { height: 16px; }
+      /* Intro hero 'garohyeong' and bottom decorative 'garohyeong' */
+      #intro img[src$="garohyeong.png"], .quiz-box img[src$="garohyeong.png"] { max-width: 130px; width: 60%; height: auto; }
+      .bottom-img { width: 14%; bottom: 10px; }
+      /* Halve the final summary font (총 X문제 중 Y개 ...) */
+      #finalResult { font-size: 18px !important; }
+    }
+  </style>
+  </head>
+  <body>
+  <div class="quiz-box" id="intro">
+    <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+    <img alt="가로형 이미지" src="garohyeong.png" style="width: 500px; margin-bottom: 20px;"/>
+    <img alt="인트로 퀴즈" src="퀴즈.png" style="width: 850px; margin-bottom: 20px; margin-top: -10px;"/>
+    <button class="btn next" onclick="startQuiz()">시작</button>
+    <!-- 통계 버튼: 표지 우측 하단에 표시 -->
+    <button class="btn stats" onclick="showStats()" style="position:absolute; right:16px; bottom:16px; width:auto; height:auto; padding:8px 12px; font-size:20px; border-radius:6px;">📊 통계 보기</button>
+  </div>
 
-    <!-- Quiz screen -->
-  <section id="quiz" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
-  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-      <div class="relative w-full max-w-[650px] mx-auto quiz-image-wrap">
-  <!-- '11번' scaled by 200%: w-1/3 (≈33.33%) *2 = ≈66.66% => w-2/3; max-w 220px *2 = 440px -->
-  <img id="questionImage" class="w-2/3 max-w-[440px] h-auto rounded mx-auto" src="11번.png" alt="문제 배경" />
-  <!-- 'quizLabel' scaled by 180%: text-2xl (~24px) *1.8 = ~43px -->
-  <div id="quizLabel" class="quiz-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[#0a2c5d] font-extrabold text-[32px]">#QUIZ 1</div>
-      </div>
-  <!-- 'question' font-size scaled by 200%: text-lg (~18px) *2 = 36px => text-4xl -->
-  <div id="question" class="question font-bold text-4xl mt-4 px-4"></div>
-      <div class="answer-buttons flex justify-evenly gap-6 w-full px-4 mt-8 mb-8">
-  <button class="btn-o flex items-center justify-center w-[166px] h-[166px] bg-white rounded-full" onclick="checkAnswer(true)"><img src="o.png" alt="O" class="w-[125px] h-[125px] object-contain"/></button>
-  <button class="btn-x flex items-center justify-center w-[166px] h-[166px] bg-white rounded-full" onclick="checkAnswer(false)"><img src="x.png" alt="X" class="w-[125px] h-[125px] object-contain"/></button>
-      </div>
-  <img class="bottom-img w-[32.5%] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
-    </section>
-
-    <!-- Explanation -->
-  <section id="explanationBox" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-4 max-w-full">
-      <div class="relative w-full max-w-[650px] mx-auto quiz-image-wrap">
-  <!-- match the quiz image sizing for consistency -->
-  <img src="11번.png" class="w-2/3 max-w-[440px] h-auto rounded mx-auto" alt="해설 배경" />
-  <div class="explanation-label absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-extrabold text-[32px] text-[#0a2c5d]">문제 해설</div>
-      </div>
-  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-  <div id="judgement" class="mt-4 text-3xl font-bold"></div>
-  <div id="explanationText" class="explanation font-bold mt-2 px-4 text-[32px]"></div>
-      <button class="next-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="nextQuestion()">다음</button>
-  <img class="bottom-img w-[32.5%] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
-    </section>
-
-    <!-- Final -->
-  <section id="finalScreen" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full">
-  <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-  <!-- final image moved to the bottom to match other screens -->
-      <div class="final-center">
-        <div id="finalResult" class="text-3xl font-extrabold"></div>
-        <p class="text-xl font-bold text-blue-600">경상북도 이동편의시설 기술지원센터는</p>
-        <p class="text-xl font-bold text-blue-600">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
-        <button class="reset-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
-      </div>
-  <!-- serohyeong moved to bottom-center inside the blue frame -->
-  <img src="serohyeong.png" class="bottom-img w-1/2 max-w-[352px] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" alt="마무리 이미지" />
-    </section>
-
-  <!-- Admin Panel (absolute so it can be moved inside the blue frame) -->
-  <div id="adminPanel" class="hidden absolute right-3 bottom-3 w-80 bg-white border-2 border-blue-500 rounded shadow-lg z-50">
-      <div class="flex items-center justify-between p-3 border-b">
-        <strong class="text-sm">관리자 통계</strong>
-        <button class="text-lg" onclick="document.getElementById('adminPanel').style.display='none'">✕</button>
-      </div>
-      <div class="content p-3 text-sm">로딩 중...</div>
-      <div class="p-3 border-t text-right">
-        <button class="bg-red-600 text-white px-3 py-1 rounded mr-2" onclick="resetStatistics()">초기화</button>
-        <button class="bg-gray-600 text-white px-3 py-1 rounded" onclick="document.getElementById('adminPanel').style.display='none'">닫기</button>
-      </div>
+  <div class="quiz-box" id="quiz" style="display:none">
+    <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+    <div class="quiz-image-wrap">
+      <img id="questionImage" src="11번.png" alt="질문 배경 이미지" />
+      <div id="quizLabel">#QUIZ 1</div>
     </div>
+    <div class="question" id="question" style="font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+    <div class="answer-buttons">
+      <button class="btn o" onclick="checkAnswer(true)"><img alt="O" src="o.png"/></button>
+      <button class="btn x" onclick="checkAnswer(false)"><img alt="X" src="x.png"/></button>
+    </div>
+    <img class="bottom-img" src="garohyeong.png"/>
+  </div>
 
-  </main>
+  <div class="quiz-box" id="explanationBox" style="display:none; position: relative;">
+    <div class="quiz-image-wrap">
+      <img src="11번.png" alt="해설 배경 이미지" />
+      <div class="explanation-label">문제 해설</div>
+    </div>
+    <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+    <div id="judgement"></div>
+    <div class="explanation" id="explanationText" style="font-weight: bold; margin-bottom: 10px; padding: 10px;"></div>
+    <button class="btn next" onclick="nextQuestion()">다음</button>
+    <img class="bottom-img" src="garohyeong.png"/>
+  </div>
 
-  <!-- Runtime env loader (optional) -->
+  <div class="quiz-box" id="finalScreen" style="display:none">
+    <img alt="기관 로고" class="topright-logo" src="제목 없음.png"/>
+    <img alt="마무리 이미지" src="serohyeong.png"/>
+    <div class="explanation" id="finalResult" style="font-size: 68px; font-weight: bold;"></div>
+    <p style="font-size: 50px; font-weight: bold; color: #2196f3;">경상북도 이동편의시설 기술지원센터는</p>
+    <p style="font-size: 50px; font-weight: bold; color: #2196f3;">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
+    <button class="btn reset" onclick="location.reload()">🔄 처음으로</button>
+    <!-- 통계 버튼은 표지에 이동됨 -->
+  </div>
+
+  <!-- Load runtime env synchronously from root (preferred) so module can read it immediately. -->
   <script src="/env.js"></script>
   <script>
-    try{ if(window.__env && !window._env) window._env = window.__env; }catch(e){}
+    // Backward-compat alias and loaded flag
+    try{
+      if(typeof window !== 'undefined' && typeof window.__env !== 'undefined' && typeof window._env === 'undefined'){
+        window._env = window.__env;
+      }
+      try{ window.__env_loaded = !!(window.__env); }catch(e){}
+    }catch(e){/* ignore */}
   </script>
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-  <script>
-    // Minimal supabase stub (no external import) to keep example runnable without keys.
+    // Runtime 환경변수(권장): public/env.js 에서 window.__env 객체를 설정하세요.
+    // 예: public/env.js
+    // window.__env = { SUPABASE_URL: 'https://xyz.supabase.co', SUPABASE_ANON_KEY: 'anon-xxx' }
+    // 저장소에는 실제 키를 커밋하지 마시고, 배포 서버에서만 제공하세요.
     const SUPABASE_URL = (window.__env && window.__env.SUPABASE_URL) || null;
     const SUPABASE_ANON_KEY = (window.__env && window.__env.SUPABASE_ANON_KEY) || null;
-    let supabase = null;
-    if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
-      console.warn('Supabase keys not found. Using stub.');
-      supabase = {
-        from: () => ({
-          insert: async ()=>({ error: 'supabase-not-configured' }),
-          select: ()=>({ eq: ()=>({ limit: async ()=>({ data: [], error: 'supabase-not-configured' }) }) })
-        })
-      };
+
+    let supabase;
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
-      // If keys are present, attempt dynamic import of supabase client
-      (async ()=>{
-        try{
-          const m = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
-          supabase = m.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-          window.supabase = supabase;
-        }catch(e){ console.warn('failed to load supabase client', e); }
-      })();
+      console.warn('Supabase keys not found. Create public/env.js with window.__env = { SUPABASE_URL, SUPABASE_ANON_KEY }');
+      // Minimal stub to avoid runtime errors when supabase isn't configured.
+      // The real supabase client returns a chainable query builder for .select(...).eq(...).limit(...)
+      // so provide a compatible stub that supports common chained calls used by this page.
+      supabase = {
+        from: function() {
+          return {
+            // insert is awaited directly in submitAnswer -> keep as async
+            insert: async function() { return { error: 'supabase-not-configured' }; },
+            // select returns a chainable builder: select(...).eq(...).limit(...)
+            select: function() {
+              const result = { data: [], error: 'supabase-not-configured' };
+              const builder = {
+                eq: function() { return builder; },
+                limit: async function() { return result; },
+                order: function() { return builder; },
+                // allow then/await patterns if someone awaits select() directly
+                then: function(resolve) { return Promise.resolve(result).then(resolve); }
+              };
+              return builder;
+            }
+          }
+        }
+      };
     }
 
     const questions = [
@@ -193,371 +475,393 @@
       { text: "대중교통 이용이나 이동에 불편을 느낀적이 있다.", answer: true, explanation: "불편하신 사항에 대해 경상북도 이동편의시설 기술지원센터에 홈페이지 또는 유선전화로 문의 주세요.<br>1566-7710" }
     ];
 
-    let current = 0; let score = 0; let submissionId = null;
+    let current = 0;
+    let score = 0;
+    let stats = questions.map(() => ({ o: 0, x: 0 }));
+    // persistent session id (optional) and per-attempt submission id
     let sessionId = localStorage.getItem('ox_session_id');
-    if(!sessionId){ sessionId = crypto.randomUUID ? crypto.randomUUID() : 's_'+Date.now(); localStorage.setItem('ox_session_id', sessionId); }
+    if(!sessionId){ sessionId = crypto.randomUUID(); localStorage.setItem('ox_session_id', sessionId); }
+    // submissionId is generated each time the quiz is started so each attempt
+    // counts as a separate participant. It is kept in-memory (not persisted).
+    let submissionId = null;
 
-  // quiz id from querystring (QR에 quiz 파라미터 포함하세요)
-  const params = new URLSearchParams(location.search);
-  const quizId = params.get('quiz') || 'ox_default_quiz';
+    // quiz id from querystring (QR에 quiz 파라미터 포함하세요)
+    const params = new URLSearchParams(location.search);
+    const quizId = params.get('quiz') || 'ox_default_quiz';
 
     async function submitAnswer(qIndex, ans){
       try{
-        const payload = { quiz_id: 'ox_default_quiz', question_index: qIndex, answer: ans, session_id: sessionId, submission_id: submissionId, user_agent: navigator.userAgent, meta: { via:'tailwind' } };
-        if(!supabase || !supabase.from){ console.log('stub submit', payload); return; }
+        const payload = {
+          quiz_id: quizId,
+          question_index: qIndex,
+          answer: ans,
+          session_id: sessionId,
+          submission_id: submissionId,
+          user_agent: navigator.userAgent,
+          meta: { via: 'qr', submission_id: submissionId }
+        };
+        // Try inserting with submission_id first. If the table does not have
+        // that column (older schema), retry inserting without it so submissions
+        // continue to work.
         let res = await supabase.from('quiz_responses').insert([payload]);
-        if(res && res.error) console.warn('submit error', res.error);
+        if(res && res.error){
+          console.warn('submit error with submission_id, retrying without submission_id', res.error);
+    const payload2 = Object.assign({}, payload);
+    // older schemas may not have a submission_id column; keep it in meta
+    delete payload2.submission_id;
+          const res2 = await supabase.from('quiz_responses').insert([payload2]);
+          if(res2 && res2.error){
+            console.error('submit error (retry without submission_id) failed', res2.error);
+          }else{
+            console.log('submit success (without submission_id)');
+          }
+        }else{
+          console.log('submit success', res && res.data ? res.data : null);
+        }
       }catch(e){ console.error(e); }
     }
 
-    function startQuiz(){
+    function startQuiz() {
+      // create a new submission id for this quiz attempt so repeated attempts
+      // from the same browser are treated as distinct participants.
       try{ submissionId = crypto.randomUUID(); }catch(e){ submissionId = 's_'+Date.now(); }
-      // Lock the visual frame to the intro size so foldables (e.g. Galaxy Fold)
-      // don't cause the blue border to resize when switching screens.
-      try{ lockFrameToIntro(); }catch(e){ console.warn('lockFrameToIntro failed', e); }
-      document.getElementById('intro').classList.add('hidden');
-      document.getElementById('quiz').classList.remove('hidden');
+      document.getElementById("intro").style.display = "none";
+      document.getElementById("quiz").style.display = "flex";
       loadQuestion();
     }
 
-    // Measure the intro box and set explicit width/height on all .fixed-frame
-    // elements so the frame stays constant after the intro is hidden.
-    function lockFrameToIntro(){
-      const intro = document.getElementById('intro');
-      if(!intro) return;
-      // ensure intro is visible when measuring
-      const prevDisplay = intro.style.display;
-      intro.style.display = '';
-      const rect = intro.getBoundingClientRect();
-      // restore previous display (not strictly necessary here)
-      intro.style.display = prevDisplay;
-      const w = Math.max(200, Math.round(rect.width));
-      const h = Math.max(200, Math.round(rect.height));
-      document.querySelectorAll('.fixed-frame').forEach(el=>{
-        el.style.width = w + 'px';
-        el.style.height = h + 'px';
-        el.style.overflow = 'auto';
-      });
-      // remember locked state
-      document.body.setAttribute('data-frame-locked','1');
+    function loadQuestion() {
+      document.getElementById("quiz").style.display = "flex";
+      document.getElementById("explanationBox").style.display = "none";
+      document.getElementById("question").textContent = questions[current].text;
+
+      const questionImage = document.getElementById("questionImage");
+      questionImage.src = "11번.png";
+      document.getElementById("quizLabel").textContent = `#QUIZ ${current + 1}`;
+      questionImage.style.display = "block";
     }
 
-    // Optional: remove inline locks to return to responsive clamps (not used by default)
-    function unlockFrame(){
-      document.querySelectorAll('.fixed-frame').forEach(el=>{
-        el.style.width = '';
-        el.style.height = '';
-        el.style.overflow = '';
-      });
-      document.body.removeAttribute('data-frame-locked');
-    }
-    function loadQuestion(){
-      document.getElementById('quiz').classList.remove('hidden');
-      document.getElementById('explanationBox').classList.add('hidden');
-      const qEl = document.getElementById('question');
-      qEl.textContent = questions[current].text;
-      document.getElementById('quizLabel').textContent = `#QUIZ ${current+1}`;
-      document.getElementById('questionImage').src = '11번.png';
-    }
-    function checkAnswer(userAnswer){
+    function checkAnswer(userAnswer) {
+      // 클라이언트에서 답 제출
       submitAnswer(current, userAnswer ? 'O' : 'X');
+
       const correct = questions[current].answer;
-      if(userAnswer === correct) score++;
-      // tally omitted (client-side) - show explanation
-      document.getElementById('quiz').classList.add('hidden');
-      document.getElementById('explanationBox').classList.remove('hidden');
-      const judge = document.getElementById('judgement');
-      judge.textContent = userAnswer === correct ? '정답입니다!' : '오답입니다!';
-      judge.className = userAnswer === correct ? 'mt-4 text-3xl font-bold text-blue-600' : 'mt-4 text-3xl font-bold text-orange-500';
-      document.getElementById('explanationText').innerHTML = questions[current].explanation;
-    }
-    function nextQuestion(){ current++; if(current < questions.length) loadQuestion(); else showFinal(); }
-    function showFinal(){ document.getElementById('explanationBox').classList.add('hidden'); document.getElementById('finalScreen').classList.remove('hidden'); const percent = questions.length>0? Math.round((score/questions.length)*100):0; document.getElementById('finalResult').textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; }
+      if (userAnswer) stats[current].o++;
+      else stats[current].x++;
+      // Count a correct answer only when it matches the correct value.
+      if (userAnswer === correct) score++;
 
-    // admin basic functions (stubbed similarly to main file)
+      document.getElementById("quiz").style.display = "none";
+      document.getElementById("explanationBox").style.display = "flex";
+
+      const judge = document.getElementById("judgement");
+      const exp = document.getElementById("explanationText");
+      if (current !== 4) {
+        judge.textContent = userAnswer === correct ? "정답입니다!" : "오답입니다!";
+        judge.className = userAnswer === correct ? "judgement correct" : "judgement wrong";
+      } else {
+        judge.textContent = "";
+      }
+      exp.innerHTML = questions[current].explanation;
+    }
+
+    function nextQuestion() {
+      current++;
+      if (current < questions.length) {
+        loadQuestion();
+      } else {
+        showFinal();
+      }
+    }
+
+    function showFinal() {
+      document.getElementById("explanationBox").style.display = "none";
+      document.getElementById("finalScreen").style.display = "flex";
+      // Show both raw correct count and percent score (정답수/문항수 * 100)
+      const percent = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+      document.getElementById("finalResult").textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`;
+    }
+
+    function showStats() {
+      // 관리자 인증 후 서버에 저장된 전체 응답을 집계해서 보여줍니다.
+      adminAuthAndShow();
+    }
+
+    // --- Admin UI & Stats -------------------------------------------------
+    // 간단한 패스워드 기반 보호: 실제 운영에서는 서버 측 인증 또는
+    // 안전한 RLS 정책을 사용하세요. 기본 패스워드를 배포 전에 바꾸세요.
     const ADMIN_PASSWORD = '1111';
+
+    // If skipPrompt is true, skip the password prompt (used when caller already validated admin)
     async function adminAuthAndShow(skipPrompt = false){
-    if(!skipPrompt){
-      const pwd = prompt('관리자 비밀번호를 입력하세요');
-      if(!pwd) return;
-      if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
-    }
-    // Supabase 클라이언트가 준비되어 있는지 확인
-    if(!supabase || typeof supabase.from !== 'function'){
-      alert('Supabase 설정이 없습니다. 서버에 public/env.js를 배치하거나 배포 환경에 Supabase 키를 설정해 주세요.');
-      console.warn('supabase not configured or invalid client', supabase);
-      return;
-    }
-    // 우선: Supabase 서버 측 RPC(get_quiz_statistics)를 사용해 집계 요청 (대량 데이터에 적합)
-    // 관리자는 Supabase SQL Editor에 아래 함수를 생성해야 합니다. (아래 안내 참고)
-    try{
-      // RPC 호출: 함수명이 get_quiz_statistics이고 파라미터 이름은 p_quiz_id입니다.
-      const { data, error } = await supabase.rpc('get_quiz_statistics', { p_quiz_id: quizId });
-      if(error){
-        console.warn('RPC get_quiz_statistics failed, falling back to client aggregation', error);
-        throw error;
+      if(!skipPrompt){
+        const pwd = prompt('관리자 비밀번호를 입력하세요');
+        if(!pwd) return;
+        if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
       }
-
-      // data: array of rows per question with fields: question_index, count_o, count_x, total_responses, correct_rate, total_participants, avg_score
-      const panel = document.getElementById('adminPanel');
-      if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
-
-      const contentEl = panel.querySelector('.content');
-      if(!contentEl){ throw new Error('panel .content element missing'); }
-
-      // We'll use the RPC data for per-question counts, but compute the overall average
-      // from raw rows to ensure average = (sum of participant scores) / participant count.
-      // First derive per-question totals from RPC rows if present.
-      let totalParticipants = 0;
-      let totalResponses = 0;
-      if(Array.isArray(data) && data.length>0){
-        totalParticipants = data[0].total_participants || 0;
-        if(typeof data[0].total_responses !== 'undefined'){
-          const sumPerQuestion = data.reduce((s,r)=> s + (Number(r.total_responses)||0), 0);
-          totalResponses = Math.round(sumPerQuestion / Math.max(1, questions.length));
-        }
+      // Supabase 클라이언트가 준비되어 있는지 확인
+      if(!supabase || typeof supabase.from !== 'function'){
+        alert('Supabase 설정이 없습니다. 서버에 public/env.js를 배치하거나 배포 환경에 Supabase 키를 설정해 주세요.');
+        console.warn('supabase not configured or invalid client', supabase);
+        return;
       }
-
-      // Fetch raw rows to compute per-row participant scores (treat each response-row as a participant)
-      // This ensures average = participant-score-sum / participant-count.
-      let avgScoreDisplay = '0.00';
+      // 우선: Supabase 서버 측 RPC(get_quiz_statistics)를 사용해 집계 요청 (대량 데이터에 적합)
+      // 관리자는 Supabase SQL Editor에 아래 함수를 생성해야 합니다. (아래 안내 참고)
       try{
-      // Do not request submission_id column directly because older DB schemas
-      // may not have it. Fetch meta (JSON) instead and read submission_id from
-      // meta if present.
-      const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id,meta').eq('quiz_id', quizId).limit(100000);
-        if(!rowsErr && Array.isArray(rows)){
-          totalResponses = rows.length;
-          // Group rows by session_id when available so a single participant's
-          // multiple answers (one per question) count as one participant.
-          const sessions = new Map();
-          let totalCorrectSum = 0;
-          // build per-question stats (counts and correct counts)
-          const perQuestionCorrect = Array(questions.length).fill(0).map(()=>0);
-          const perQuestionCounts = Array(questions.length).fill(0).map(()=>({ o:0, x:0, total:0 }));
-          for(const [i, r] of rows.entries()){
-            const qi = Number(r.question_index);
-            const ansRaw = r.answer;
-            const ans = String(ansRaw).toUpperCase();
-            // tally O/X counts
-            if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCounts.length){
+        // RPC 호출: 함수명이 get_quiz_statistics이고 파라미터 이름은 p_quiz_id입니다.
+        const { data, error } = await supabase.rpc('get_quiz_statistics', { p_quiz_id: quizId });
+        if(error){
+          console.warn('RPC get_quiz_statistics failed, falling back to client aggregation', error);
+          throw error;
+        }
+
+        // data: array of rows per question with fields: question_index, count_o, count_x, total_responses, correct_rate, total_participants, avg_score
+        const panel = document.getElementById('adminPanel');
+        if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
+
+        const contentEl = panel.querySelector('.content');
+        if(!contentEl){ throw new Error('panel .content element missing'); }
+
+        // We'll use the RPC data for per-question counts, but compute the overall average
+        // from raw rows to ensure average = (sum of participant scores) / participant count.
+        // First derive per-question totals from RPC rows if present.
+        let totalParticipants = 0;
+        let totalResponses = 0;
+        if(Array.isArray(data) && data.length>0){
+          totalParticipants = data[0].total_participants || 0;
+          if(typeof data[0].total_responses !== 'undefined'){
+            const sumPerQuestion = data.reduce((s,r)=> s + (Number(r.total_responses)||0), 0);
+            totalResponses = Math.round(sumPerQuestion / Math.max(1, questions.length));
+          }
+        }
+
+        // Fetch raw rows to compute per-row participant scores (treat each response-row as a participant)
+        // This ensures average = participant-score-sum / participant-count.
+        let avgScoreDisplay = '0.00';
+        try{
+        // Do not request submission_id column directly because older DB schemas
+        // may not have it. Fetch meta (JSON) instead and read submission_id from
+        // meta if present.
+        const { data: rows, error: rowsErr } = await supabase.from('quiz_responses').select('answer,question_index,session_id,meta').eq('quiz_id', quizId).limit(100000);
+          if(!rowsErr && Array.isArray(rows)){
+            totalResponses = rows.length;
+            // Group rows by session_id when available so a single participant's
+            // multiple answers (one per question) count as one participant.
+            const sessions = new Map();
+            let totalCorrectSum = 0;
+            // build per-question stats (counts and correct counts)
+            const perQuestionCorrect = Array(questions.length).fill(0).map(()=>0);
+            const perQuestionCounts = Array(questions.length).fill(0).map(()=>({ o:0, x:0, total:0 }));
+            for(const [i, r] of (rows || []).entries()){
+              const qi = Number(r.question_index);
+              const ans = String(r.answer).toUpperCase();
+              if(!perQuestionCounts[qi]) perQuestionCounts[qi] = { o:0, x:0, total:0 };
               if(ans === 'O' || ans === 'TRUE' || ans === 'T') perQuestionCounts[qi].o++;
               else perQuestionCounts[qi].x++;
               perQuestionCounts[qi].total++;
+              const correctBool = !!(questions[qi] && questions[qi].answer);
+              const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctBool) ? 1 : 0;
+              if(isCorrect) totalCorrectSum++;
+              if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCorrect.length && isCorrect) perQuestionCorrect[qi]++;
+              const sid = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
+              sessions.set(sid, (sessions.get(sid) || 0) + isCorrect);
             }
-            const correctBool = !!(questions[qi] && questions[qi].answer);
-            const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctBool) ? 1 : 0;
-            if(isCorrect) totalCorrectSum++;
-            if(typeof qi === 'number' && qi >= 0 && qi < perQuestionCorrect.length && isCorrect) perQuestionCorrect[qi]++;
-
-            const sid = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
-            sessions.set(sid, (sessions.get(sid) || 0) + isCorrect);
-          }
-          const participantCount = sessions.size;
-          // Compute average as the mean of per-participant percentages so it
-          // matches the single-player percent shown on the final screen.
-          let sumParticipantPercent = 0;
-          for(const correctCount of sessions.values()){
-            const pPercent = (questions.length > 0) ? (correctCount / questions.length) * 100 : 0;
-            sumParticipantPercent += pPercent;
-          }
-          const avgPercent = (participantCount > 0) ? (sumParticipantPercent / participantCount) : 0;
-          avgScoreDisplay = avgPercent.toFixed(2);
-
-          // If we have the admin panel open already, prefer to display these
-          // per-question counts computed from raw rows rather than RPC values.
-          // We'll stash them on the panel element for the rendering logic below.
-          try{
-            const panel = document.getElementById('adminPanel');
-            if(panel){
-              panel._perQuestionCorrect = perQuestionCorrect;
-              panel._perQuestionCounts = perQuestionCounts;
-              panel._totalResponses = totalResponses;
-              panel._participantCount = participantCount;
+            const participantCount = sessions.size;
+            // Compute average as the mean of per-participant percentages so it
+            // matches the single-player percent shown on the final screen.
+            let sumParticipantPercent = 0;
+            for(const correctCount of sessions.values()){
+              const pPercent = (questions.length > 0) ? (correctCount / questions.length) * 100 : 0;
+              sumParticipantPercent += pPercent;
             }
-          }catch(e){/* ignore */}
-        }
-      }catch(e){ console.warn('failed to fetch rows for avg calc', e); }
-  // Choose displayParticipants: prefer computed participant count (from submission_id grouping)
-  // If the per-attempt participant count was computed and stored on the panel, use it.
-  const panelEl = document.getElementById('adminPanel');
-  const computedParticipantCount = panelEl && (typeof panelEl._participantCount === 'number') ? panelEl._participantCount : null;
-  const displayParticipants = (computedParticipantCount !== null) ? computedParticipantCount : (totalParticipants && totalParticipants > 0 ? totalParticipants : totalResponses);
-      let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-        <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants}</div>
-        <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
-        <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+            const avgPercent = (participantCount > 0) ? (sumParticipantPercent / participantCount) : 0;
+            avgScoreDisplay = avgPercent.toFixed(2);
 
-      // Ensure we render rows for each question index in order
-      const rpcRows = Array.isArray(data) ? data.sort((a,b)=> (a.question_index||0)-(b.question_index||0)) : [];
-      // check if we computed per-question correct counts and counts from raw rows earlier
-      const panelPerQ = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCorrect ? p._perQuestionCorrect : null; }catch(e){return null;} })();
-      const panelPerCounts = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCounts ? p._perQuestionCounts : null; }catch(e){return null;} })();
-      for(let i=0;i<questions.length;i++){
-        const row = rpcRows.find(r=>Number(r.question_index)===i) || null;
-        let countO = 0, countX = 0, total = 0;
-        // Prefer per-question counts computed from raw rows when available
-        if(panelPerCounts && typeof panelPerCounts[i] !== 'undefined'){
-          countO = Number(panelPerCounts[i].o||0);
-          countX = Number(panelPerCounts[i].x||0);
-          total = Number(panelPerCounts[i].total||0);
-        }else{
-          countO = row ? Number(row.count_o||0) : 0;
-          countX = row ? Number(row.count_x||0) : 0;
-          total = row ? Number(row.total_responses||0) : 0;
-        }
-        // Prefer per-question correct counts from raw rows when available, otherwise fall back to RPC's correct_rate
-        let correctRate = 0;
-        if(panelPerQ && typeof panelPerQ[i] !== 'undefined' && total > 0){
-          correctRate = ((panelPerQ[i] / total) * 100);
-          correctRate = Number(correctRate).toFixed(2);
-        }else{
-          correctRate = row ? Number(row.correct_rate||0) : 0;
-        }
-        html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${countO} &nbsp; X=${countX} &nbsp; (총 ${total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
-      }
-      html += `</div>`;
-
-      contentEl.innerHTML = html;
-      panel.style.display = 'block';
-      panel.scrollIntoView({behavior:'smooth'});
-
-    }catch(rpcErr){
-      // RPC가 없거나 실패한 경우 기존 클라이언트 집계 방식(모든 행을 읽어 들여 집계)으로 폴백
-      try{
-        const { data, error } = await supabase.from('quiz_responses').select('*').eq('quiz_id', quizId).limit(100000);
-        if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
-        const agg = {};
-        // Build per-session scores. If a row lacks session_id, treat that row as its own participant
-        const perSessionScore = {};
-        for(const [i, r] of (data || []).entries()){
-          const qi = Number(r.question_index);
-          const ans = String(r.answer).toUpperCase();
-          if(!agg[qi]) agg[qi] = { O:0, X:0, total:0, correctCount:0 };
-          if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
-          else agg[qi].X++;
-          agg[qi].total++;
-
-          // Determine whether this response was correct by comparing to the
-          // authoritative answer in the `questions` array.
-          const correctAnswerIsO = !!(questions[qi] && questions[qi].answer);
-          const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0;
-          agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;
-
-          // Group by submission_id (from meta if necessary) then session_id so a
-          // single participant's answers across multiple questions count as
-          // one participant rather than being counted once per question.
-          const sessionKey = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
-          perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + isCorrect;
-        }
-
-        const participantIds = Object.keys(perSessionScore);
-        const totalParticipants = participantIds.length;
-        // sum of correct answers across participants
-        const totalCorrectSum = participantIds.length > 0 ? participantIds.reduce((acc, id) => acc + (perSessionScore[id]||0), 0) : 0;
-        // Average percent = (total correct across participants) / (participants * questions.length) * 100
-        const avgScorePercent = (totalParticipants > 0 && questions.length > 0) ? (totalCorrectSum / (totalParticipants * questions.length)) * 100 : 0;
-        const avgScoreDisplay = avgScorePercent.toFixed(2);
-
-        // total responses is simply the number of rows fetched
-        const totalResponses = Array.isArray(data) ? data.length : 0;
-
+            // stash computed per-question counts on panel for renderer
+            try{ if(panel){ panel._perQuestionCorrect = perQuestionCorrect; panel._perQuestionCounts = perQuestionCounts; panel._totalResponses = totalResponses; panel._participantCount = participantCount; } }catch(e){/*ignore*/}
+          }
+        }catch(e){ console.warn('failed to fetch rows for avg calc', e); }
+    const panelEl = document.getElementById('adminPanel');
+    const computedParticipantCount = panelEl && (typeof panelEl._participantCount === 'number') ? panelEl._participantCount : null;
+    const displayParticipants = (computedParticipantCount !== null) ? computedParticipantCount : (totalParticipants && totalParticipants > 0 ? totalParticipants : totalResponses);
         let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
-          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+          <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${displayParticipants}</div>
           <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
           <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+        const rpcRows = Array.isArray(data) ? data.sort((a,b)=> (a.question_index||0)-(b.question_index||0)) : [];
+        const panelPerQ = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCorrect ? p._perQuestionCorrect : null; }catch(e){return null;} })();
+        const panelPerCounts = (function(){ try{ const p = document.getElementById('adminPanel'); return p && p._perQuestionCounts ? p._perQuestionCounts : null; }catch(e){return null;} })();
         for(let i=0;i<questions.length;i++){
-          const a = agg[i] || {O:0,X:0,total:0,correctCount:0};
-          // Use the counted correct responses if available. If not, fall back
-          // to interpreting O/X relative to the known correct answer.
-          const correctCount = (typeof a.correctCount !== 'undefined' && a.correctCount !== null)
-            ? a.correctCount
-            : (questions[i] && questions[i].answer ? a.O : a.X);
-          const correctRate = a.total ? ((correctCount / a.total) * 100).toFixed(2) : '0.00';
-          html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
+          const row = rpcRows.find(r=>Number(r.question_index)===i) || null;
+          let countO = 0, countX = 0, total = 0;
+          if(panelPerCounts && typeof panelPerCounts[i] !== 'undefined'){
+            countO = Number(panelPerCounts[i].o||0);
+            countX = Number(panelPerCounts[i].x||0);
+            total = Number(panelPerCounts[i].total||0);
+          }else{
+            countO = row ? Number(row.count_o||0) : 0;
+            countX = row ? Number(row.count_x||0) : 0;
+            total = row ? Number(row.total_responses||0) : 0;
+          }
+          let correctRate = 0;
+          if(panelPerQ && typeof panelPerQ[i] !== 'undefined' && total > 0){
+            correctRate = ((panelPerQ[i] / total) * 100);
+            correctRate = Number(correctRate).toFixed(2);
+          }else{
+            correctRate = row ? Number(row.correct_rate||0) : 0;
+          }
+          html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${countO} &nbsp; X=${countX} &nbsp; (총 ${total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
         }
         html += `</div>`;
+        contentEl.innerHTML = html; panel.style.display = 'block'; panel.scrollIntoView({behavior:'smooth'});
 
-        const panel = document.getElementById('adminPanel');
-        if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
-        const contentEl = panel.querySelector('.content');
-        if(!contentEl){ throw new Error('panel .content element missing'); }
-        contentEl.innerHTML = html;
-        panel.style.display = 'block';
-        panel.scrollIntoView({behavior:'smooth'});
-      }catch(e){
-        console.error('adminAuthAndShow error', e);
+      }catch(rpcErr){
+        try{
+          const { data, error } = await supabase.from('quiz_responses').select('*').eq('quiz_id', quizId).limit(100000);
+          if(error){ console.error('stat fetch error', error); alert('통계를 불러오는 중 오류가 발생했습니다: '+(error.message||JSON.stringify(error))); return; }
+          const agg = {};
+          const perSessionScore = {};
+          for(const [i, r] of (data || []).entries()){
+            const qi = Number(r.question_index);
+            const ans = String(r.answer).toUpperCase();
+            if(!agg[qi]) agg[qi] = { O:0, X:0, total:0, correctCount:0 };
+            if(ans === 'O' || ans === 'TRUE' || ans === 'T') agg[qi].O++;
+            else agg[qi].X++;
+            agg[qi].total++;
+            const correctAnswerIsO = !!(questions[qi] && questions[qi].answer);
+            const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0;
+            agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;
+            const sessionKey = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
+            perSessionScore[sessionKey] = (perSessionScore[sessionKey] || 0) + isCorrect;
+          }
+          const participantIds = Object.keys(perSessionScore);
+          const totalParticipants = participantIds.length;
+          const totalCorrectSum = participantIds.length > 0 ? participantIds.reduce((acc, id) => acc + (perSessionScore[id]||0), 0) : 0;
+          const avgScorePercent = (totalParticipants > 0 && questions.length > 0) ? (totalCorrectSum / (totalParticipants * questions.length)) * 100 : 0;
+          const avgScoreDisplay = avgScorePercent.toFixed(2);
+          const totalResponses = Array.isArray(data) ? data.length : 0;
+          let html = `<div style="padding:12px; max-height:360px; overflow:auto; font-size:14px;">
+            <div style="margin-bottom:8px;"><strong>참여인원:</strong> ${totalParticipants}</div>
+            <div style="margin-bottom:8px;"><strong>평균 점수:</strong> ${avgScoreDisplay} 점</div>
+            <div style="margin-bottom:6px; font-weight:bold;">문항별 결과</div>`;
+          for(let i=0;i<questions.length;i++){
+            const a = agg[i] || {O:0,X:0,total:0,correctCount:0};
+            const correctCount = (typeof a.correctCount !== 'undefined' && a.correctCount !== null) ? a.correctCount : (questions[i] && questions[i].answer ? a.O : a.X);
+            const correctRate = a.total ? ((correctCount / a.total) * 100).toFixed(2) : '0.00';
+            html += `<div style="margin-bottom:6px;"><strong>Q${i+1}</strong>: O=${a.O} &nbsp; X=${a.X} &nbsp; (총 ${a.total}) &nbsp; <em>정답률: ${correctRate}%</em></div>`;
+          }
+          html += `</div>`;
+          const panel = document.getElementById('adminPanel');
+          if(!panel){ console.error('adminPanel element not found'); alert('관리자 패널을 찾을 수 없습니다. 페이지 구조를 확인하세요.'); return; }
+          const contentEl = panel.querySelector('.content');
+          if(!contentEl){ throw new Error('panel .content element missing'); }
+          contentEl.innerHTML = html; panel.style.display = 'block'; panel.scrollIntoView({behavior:'smooth'});
+        }catch(e){ console.error(e); alert('오류'); }
+      }
+    }
+
+    async function resetStatistics(){
+      const pwd = prompt('관리자 비밀번호를 입력하세요');
+      if(!pwd) return;
+      if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
+      if(!confirm('정말 이 퀴즈의 모든 응답을 삭제하고 통계를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+
+      // 1) 우선 RPC 호출 시도
+      try{
+        // show progress in admin panel if present
         try{
           const panel = document.getElementById('adminPanel');
           const contentEl = panel && panel.querySelector && panel.querySelector('.content');
-          if(contentEl) contentEl.innerHTML = '<div style="color:#a00;">오류: '+(e && e.message ? e.message : String(e))+'</div>' + '<pre style="white-space:pre-wrap; font-size:12px;">'+(e && e.stack ? e.stack : '')+'</pre>';
-        }catch(err){ console.error('failed to render admin error', err); }
-        alert('통계를 불러오는 중 오류가 발생했습니다. 개발자 콘솔을 확인하세요.');
-      }
-    }
-  }
-    async function showStats(){ adminAuthAndShow(); }
-    async function resetStatistics(){
-    const pwd = prompt('관리자 비밀번호를 입력하세요');
-    if(!pwd) return;
-    if(pwd !== ADMIN_PASSWORD){ alert('비밀번호가 일치하지 않습니다'); return; }
-    if(!confirm('정말 이 퀴즈의 모든 응답을 삭제하고 통계를 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
-
-    // 1) 우선 RPC 호출 시도
-    try{
-      // show progress in admin panel if present
-      try{
-        const panel = document.getElementById('adminPanel');
-        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
-        if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(RPC 호출)</div>';
-      }catch(e){/* ignore */}
-      const { data, error } = await supabase.rpc('reset_quiz_statistics', { p_quiz_id: quizId });
-      if(error){
-        console.error('RPC reset error', error, data);
-        const panel = document.getElementById('adminPanel');
-        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
-        if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">RPC 실패: '+(error.message||JSON.stringify(error))+'</div>';
-        alert('RPC로 초기화하는데 실패했습니다:\n'+(error.message||JSON.stringify(error))+'\n폴백으로 삭제를 시도합니다. 콘솔을 확인하세요.');
-        throw error;
-      }
-      console.log('RPC reset success', data);
-      // show success in panel
-      try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (RPC)</div>'; }catch(e){}
-      alert('통계가 초기화되었습니다. (RPC)');
-      // 이미 초기화 권한을 확인했으므로 패스워드 재입력을 건너뛰고 패널을 갱신합니다.
-      try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after reset error', e); }
-      return;
-    }catch(e){
-      console.warn('RPC reset failed, falling back to client-side delete', e);
-    }
-
-    // 2) RPC가 없으면 클라이언트에서 삭제 시도 (주의: RLS에 따라 실패할 수 있음)
-    try{
-      try{
-        const panel = document.getElementById('adminPanel');
-        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
-        if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(삭제 호출)</div>';
-      }catch(e){}
-      const { data, error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
-      if(error){
-        console.error('delete error', error, data);
-        const panel = document.getElementById('adminPanel');
-        const contentEl = panel && panel.querySelector && panel.querySelector('.content');
-        if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">삭제 실패: '+(error.message||JSON.stringify(error))+'</div>';
-        alert('초기화 실패: '+(error.message||JSON.stringify(error))+'\n브라우저 콘솔의 자세한 정보를 확인하세요.');
+          if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(RPC 호출)</div>';
+        }catch(e){/* ignore */}
+        const { data, error } = await supabase.rpc('reset_quiz_statistics', { p_quiz_id: quizId });
+        if(error){
+          console.error('RPC reset error', error, data);
+          const panel = document.getElementById('adminPanel');
+          const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+          if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">RPC 실패: '+(error.message||JSON.stringify(error))+'</div>';
+          alert('RPC로 초기화하는데 실패했습니다:\n'+(error.message||JSON.stringify(error))+'\n폴백으로 삭제를 시도합니다. 콘솔을 확인하세요.');
+          throw error;
+        }
+        console.log('RPC reset success', data);
+        // show success in panel
+        try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (RPC)</div>'; }catch(e){}
+        alert('통계가 초기화되었습니다. (RPC)');
+        // 이미 초기화 권한을 확인했으므로 패스워드 재입력을 건너뛰고 패널을 갱신합니다.
+        try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after reset error', e); }
         return;
+      }catch(e){
+        console.warn('RPC reset failed, falling back to client-side delete', e);
       }
-      console.log('delete success', data);
-      const deletedCount = Array.isArray(data) ? data.length : (data && data.count) ? data.count : '알 수 없음';
-      try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (삭제 방식) 삭제된 항목: '+deletedCount+'</div>'; }catch(e){}
-      alert('통계가 초기화되었습니다. (삭제 방식)');
-      // 패널을 재로딩하되 패스워드 프롬프트는 생략
-      try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after delete error', e); }
-    }catch(e){ console.error('reset error', e); alert('초기화 도중 오류가 발생했습니다. 서버 측에서 RPC(reset_quiz_statistics)를 만드는 것을 권장합니다.'); }
+
+      // 2) RPC가 없으면 클라이언트에서 삭제 시도 (주의: RLS에 따라 실패할 수 있음)
+      try{
+        try{
+          const panel = document.getElementById('adminPanel');
+          const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+          if(contentEl) contentEl.innerHTML = '<div style="padding:12px;">초기화 중...(삭제 호출)</div>';
+        }catch(e){}
+        const { data, error } = await supabase.from('quiz_responses').delete().eq('quiz_id', quizId);
+        if(error){
+          console.error('delete error', error, data);
+          const panel = document.getElementById('adminPanel');
+          const contentEl = panel && panel.querySelector && panel.querySelector('.content');
+          if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:#a00;">삭제 실패: '+(error.message||JSON.stringify(error))+'</div>';
+          alert('초기화 실패: '+(error.message||JSON.stringify(error))+'\n브라우저 콘솔의 자세한 정보를 확인하세요.');
+          return;
+        }
+        console.log('delete success', data);
+        const deletedCount = Array.isArray(data) ? data.length : (data && data.count) ? data.count : '알 수 없음';
+        try{ const panel = document.getElementById('adminPanel'); const contentEl = panel && panel.querySelector && panel.querySelector('.content'); if(contentEl) contentEl.innerHTML = '<div style="padding:12px; color:green;">통계가 초기화되었습니다. (삭제 방식) 삭제된 항목: '+deletedCount+'</div>'; }catch(e){}
+        alert('통계가 초기화되었습니다. (삭제 방식)');
+        // 패널을 재로딩하되 패스워드 프롬프트는 생략
+        try{ adminAuthAndShow(true); }catch(e){ console.error('adminAuthAndShow after delete error', e); }
+      }catch(e){ console.error('reset error', e); alert('초기화 도중 오류가 발생했습니다. 서버 측에서 RPC(reset_quiz_statistics)를 만드는 것을 권장합니다.'); }
     }
 
-    // expose for inline onclick
-    window.startQuiz = startQuiz; window.checkAnswer = checkAnswer; window.nextQuestion = nextQuestion; window.showStats = showStats; window.resetStatistics = resetStatistics; window.adminAuthAndShow = adminAuthAndShow;
+    // Expose handlers to global scope so inline onclick attributes (in HTML) can call them.
+    // When using <script type="module">, top-level functions are module-scoped and
+    // not added to window — that prevents onclick="startQuiz()" from working.
+    window.startQuiz = startQuiz;
+    window.checkAnswer = checkAnswer;
+    window.nextQuestion = nextQuestion;
+    window.showStats = showStats;
+    // expose admin handlers used by inline onclick attributes
+    window.resetStatistics = resetStatistics;
+    window.adminAuthAndShow = adminAuthAndShow;
+    // Expose supabase to window for debugging (will be undefined if not configured)
+    try{ window.supabase = supabase; }catch(e){/* ignore */}
+
+    // Ensure adminPanel .content exists (defensive) once DOM is ready
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const panel = document.getElementById('adminPanel');
+      if(panel){
+        let content = panel.querySelector('.content');
+        if(!content){
+          content = document.createElement('div');
+          content.className = 'content';
+          content.style.padding = '8px 12px';
+          content.style.fontSize = '13px';
+          content.style.color = '#111';
+          content.textContent = '로딩 중...';
+          // insert before the footer buttons if present
+          const footer = panel.querySelector('div[style*="border-top"]');
+          panel.insertBefore(content, footer || null);
+        }
+      }
+    });
   </script>
-</body>
-</html>
+  <!-- 관리자 통계 패널 (초기 상태는 숨김) -->
+  <div id="adminPanel" style="display:none; position:fixed; right:12px; bottom:12px; width:360px; max-width:90%; background:#fff; border:2px solid #2196f3; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.2); z-index:9999; font-family: sans-serif;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid #eee; background:#f7fbff;">
+      <strong style="font-size:14px;">관리자 통계</strong>
+      <button onclick="document.getElementById('adminPanel').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:18px;">✕</button>
+    </div>
+    <div class="content" style="padding:8px 12px; font-size:13px; color:#111">로딩 중...</div>
+    <div style="padding:8px 12px; border-top:1px solid #eee; text-align:right;">
+      <button onclick="resetStatistics()" style="margin-right:8px; padding:6px 10px; border-radius:6px; border:none; background:#e53935; color:#fff; cursor:pointer">초기화</button>
+      <button onclick="document.getElementById('adminPanel').style.display='none'" style="padding:6px 10px; border-radius:6px; border:none; background:#607d8b; color:#fff; cursor:pointer">닫기</button>
+    </div>
+  </div>
+  </body>
+  </html>
