@@ -227,6 +227,13 @@
   const params = new URLSearchParams(location.search);
   const quizId = params.get('quiz') || 'ox_default_quiz';
 
+    // Preload sound effects (file paths: 정답.mp3, 오답.mp3)
+    let soundCorrect = null, soundWrong = null;
+    try{
+      soundCorrect = new Audio('정답.mp3'); soundCorrect.preload = 'auto';
+      soundWrong = new Audio('오답.mp3'); soundWrong.preload = 'auto';
+    }catch(e){ console.warn('audio preload failed', e); }
+
     async function submitAnswer(qIndex, ans){
       try{
         // Use the runtime quizId (from querystring) so submissions match the
@@ -302,6 +309,14 @@
     function checkAnswer(userAnswer){
       submitAnswer(current, userAnswer ? 'O' : 'X');
       const correct = questions[current].answer;
+      // play sound effect according to correctness
+      try{
+        if(userAnswer === correct){
+          if(soundCorrect && typeof soundCorrect.play === 'function'){ soundCorrect.currentTime = 0; soundCorrect.play().catch(()=>{}); }
+        }else{
+          if(soundWrong && typeof soundWrong.play === 'function'){ soundWrong.currentTime = 0; soundWrong.play().catch(()=>{}); }
+        }
+      }catch(e){ console.warn('sound play failed', e); }
       if(userAnswer === correct) score++;
       // tally omitted (client-side) - show explanation
       document.getElementById('quiz').classList.add('hidden');
