@@ -34,10 +34,25 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      transform: translate(-50%, -50%);
+      /* move the text block up by the final button height so the button can sit below */
+      --final-btn-h: 44px;
+      --final-btn-gap: 12px;
+      transform: translate(-50%, calc(-50% - var(--final-btn-h)));
       width: calc(100% - 3rem);
       text-align: center;
       z-index: 10;
+    }
+    /* final screen button positioned below center */
+    .final-button{
+      position: absolute;
+      left: 50%;
+      top: calc(50% + var(--final-btn-gap));
+      transform: translateX(-50%);
+      height: var(--final-btn-h);
+      z-index: 11;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
   </style>
 </head>
@@ -117,9 +132,7 @@
         <p class="text-xl font-bold text-blue-600">경상북도 이동편의시설 기술지원센터는</p>
         <p class="text-xl font-bold text-blue-600">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
       </div>
-      <div class="text-center">
-        <button class="reset-btn mt-4 bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
-      </div>
+      <button class="reset-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
   <!-- serohyeong moved to bottom-center inside the blue frame -->
   <img src="serohyeong.png" class="bottom-img w-1/2 max-w-[352px] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" alt="마무리 이미지" />
     </section>
