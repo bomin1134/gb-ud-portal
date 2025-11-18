@@ -172,6 +172,25 @@
     const SUPABASE_URL = (window.__env && window.__env.SUPABASE_URL) || null;
     const SUPABASE_ANON_KEY = (window.__env && window.__env.SUPABASE_ANON_KEY) || null;
     let supabase = null;
+    // Queue for submissions made before the Supabase client is ready
+    const _pendingSubmissions = [];
+    async function _flushPendingSubmissions(){
+      if(!supabase || typeof supabase.from !== 'function') return;
+      if(_pendingSubmissions.length === 0) return;
+      console.log('Flushing', _pendingSubmissions.length, 'pending submissions to Supabase');
+      while(_pendingSubmissions.length){
+        const payload = _pendingSubmissions.shift();
+        try{
+          const res = await supabase.from('quiz_responses').insert([payload]);
+          if(res && res.error) console.warn('pending submit error', res.error, payload);
+        }catch(err){
+          console.error('failed to flush pending submission', err, payload);
+          // requeue and stop trying to avoid tight loop
+          _pendingSubmissions.unshift(payload);
+          break;
+        }
+      }
+    }
     if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
       console.warn('Supabase keys not found. Using stub.');
       supabase = {
@@ -187,6 +206,7 @@
           const m = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
           supabase = m.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           window.supabase = supabase;
+          try{ await _flushPendingSubmissions(); }catch(e){ console.warn('failed to flush pending submissions', e); }
         }catch(e){ console.warn('failed to load supabase client', e); }
       })();
     }
@@ -209,8 +229,20 @@
 
     async function submitAnswer(qIndex, ans){
       try{
-        const payload = { quiz_id: 'ox_default_quiz', question_index: qIndex, answer: ans, session_id: sessionId, submission_id: submissionId, user_agent: navigator.userAgent, meta: { via:'tailwind' } };
-        if(!supabase || !supabase.from){ console.log('stub submit', payload); return; }
+        // Use the runtime quizId (from querystring) so submissions match the
+        // same quiz identifier the admin statistics view queries.
+        const payload = { quiz_id: quizId, question_index: qIndex, answer: ans, session_id: sessionId, submission_id: submissionId, user_agent: navigator.userAgent, meta: { via:'tailwind' } };
+        // If no keys are configured, behave as a stub (log and return)
+        if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
+          console.log('Supabase keys missing — stub submit:', payload);
+          return;
+        }
+        // If client not ready yet, queue the payload for later flushing
+        if(!supabase || typeof supabase.from !== 'function'){
+          _pendingSubmissions.push(payload);
+          console.log('Supabase client not ready — queued submission. Pending count:', _pendingSubmissions.length);
+          return;
+        }
         let res = await supabase.from('quiz_responses').insert([payload]);
         if(res && res.error) console.warn('submit error', res.error);
       }catch(e){ console.error(e); }
