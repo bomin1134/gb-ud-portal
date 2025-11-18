@@ -101,12 +101,13 @@
     <!-- Final -->
   <section id="finalScreen" class="quiz-box fixed-frame relative hidden flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full">
   <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-  <!-- final image reduced similarly -->
-  <img src="serohyeong.png" class="w-1/2 max-w-[352px] mb-4 mx-auto" alt="마무리 이미지" />
+  <!-- final image moved to the bottom to match other screens -->
       <div id="finalResult" class="text-3xl font-extrabold"></div>
       <p class="text-xl font-bold text-blue-600">경상북도 이동편의시설 기술지원센터는</p>
       <p class="text-xl font-bold text-blue-600">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
       <button class="reset-btn mt-4 bg-gray-600 text-white px-4 py-2 rounded-md" onclick="location.reload()">🔄 처음으로</button>
+  <!-- serohyeong moved to bottom-center inside the blue frame -->
+  <img src="serohyeong.png" class="bottom-img w-1/2 max-w-[352px] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" alt="마무리 이미지" />
     </section>
 
   <!-- Admin Panel (absolute so it can be moved inside the blue frame) -->
