@@ -86,12 +86,12 @@
   <main class="max-w-3xl mx-auto px-4 py-8">
   <section id="intro" class="quiz-box fixed-frame relative flex flex-col items-center justify-center text-center mx-auto border-8 border-blue-500 bg-white rounded-2xl p-6 max-w-full" >
   <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
-  <!-- moved garohyeong to the bottom to match other pages -->
-  <img class="bottom-img w-[32.5%] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
+  <!-- moved garohyeong to the bottom to match other pages (increased size by 30%) -->
+  <img class="bottom-img w-[42.25%] absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none" src="garohyeong.png" alt="garo" />
   <!-- '퀴즈' scaled by 250%: w-1/3 (≈33.33%) *2.5 = ≈83.33% => w-5/6; max-w 260px *2.5 = 650px -->
   <img class="mb-4 w-5/6 max-w-[650px]" src="퀴즈.png" alt="인트로 퀴즈" />
   <button class="start-btn bg-indigo-600 text-white px-6 py-3 rounded-md text-lg font-bold" onclick="startQuiz()">시작</button>
-      <button class="btn-stats absolute right-4 bottom-4 bg-gray-600 text-white px-3 py-1 rounded-md text-sm" onclick="showStats()">📊 통계 보기</button>
+    <button class="btn-stats absolute right-4 bottom-4 bg-gray-600 text-white px-3 py-1 rounded-md text-sm" style="transform:scale(0.7);transform-origin:center;" onclick="showStats()">📊 통계 보기</button>
     </section>
 
     <!-- Quiz screen -->
