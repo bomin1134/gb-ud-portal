@@ -322,21 +322,23 @@
     function checkAnswer(userAnswer){
       submitAnswer(current, userAnswer ? 'O' : 'X');
       const correct = questions[current].answer;
+      // Special handling for question 5 (index 4): both answers are correct
+      const isCorrect = (current === 4) ? true : (userAnswer === correct);
       // play sound effect according to correctness
       try{
-        if(userAnswer === correct){
+        if(isCorrect){
           if(soundCorrect && typeof soundCorrect.play === 'function'){ soundCorrect.currentTime = 0; soundCorrect.play().catch(()=>{}); }
         }else{
           if(soundWrong && typeof soundWrong.play === 'function'){ soundWrong.currentTime = 0; soundWrong.play().catch(()=>{}); }
         }
       }catch(e){ console.warn('sound play failed', e); }
-      if(userAnswer === correct) score++;
+      if(isCorrect) score++;
       // tally omitted (client-side) - show explanation
       document.getElementById('quiz').classList.add('hidden');
       document.getElementById('explanationBox').classList.remove('hidden');
       const judge = document.getElementById('judgement');
-      judge.textContent = userAnswer === correct ? '정답입니다!' : '오답입니다!';
-      judge.className = userAnswer === correct ? 'mt-4 text-3xl font-bold text-blue-600' : 'mt-4 text-3xl font-bold text-orange-500';
+      judge.textContent = isCorrect ? '정답입니다!' : '오답입니다!';
+      judge.className = isCorrect ? 'mt-4 text-3xl font-bold text-blue-600' : 'mt-4 text-3xl font-bold text-orange-500';
       document.getElementById('explanationText').innerHTML = questions[current].explanation;
       try{ alignNextToReset(); }catch(e){}
     }
