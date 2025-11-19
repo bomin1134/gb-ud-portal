@@ -4,11 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OX 퀴즈 (Tailwind)</title>
+  <!-- Google Fonts - Jua -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
   <!-- Tailwind CDN for quick prototype (use build integration for production) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* reduce base font-size to ~75% of the default to make all text smaller */
-    body { font-size: 75%; }
+    body { 
+      font-size: 75%;
+      font-family: 'Jua', sans-serif;
+    }
   /* set question and explanation text to 16pt as requested */
   #question, #explanationText { font-size: 16pt !important; }
     /* small helpers for mode classes applied by JS */
