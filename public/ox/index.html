@@ -356,12 +356,16 @@
       document.getElementById('explanationBox').classList.add('hidden'); 
       document.getElementById('finalScreen').classList.remove('hidden'); 
       const percent = questions.length>0? Math.round((score/questions.length)*100):0; 
-      const congratsMsg = percent >= 60 ? '축하합니다!' : '아쉽습니다.\n다시 도전해보세요!';
-      document.getElementById('finalCongrats').textContent = congratsMsg;
+      const congratsEl = document.getElementById('finalCongrats');
+      if(percent >= 60) {
+        congratsEl.textContent = '축하합니다!';
+        congratsEl.className = 'text-3xl font-extrabold mb-2 text-blue-600';
+      } else {
+        congratsEl.textContent = '아쉽습니다.';
+        congratsEl.className = 'text-3xl font-extrabold mb-2 text-orange-600';
+      }
       document.getElementById('finalResult').textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; 
-    }
-
-    // stop bgm when showing final screen
+    }    // stop bgm when showing final screen
     (function(){
       const origShowFinal = showFinal;
       showFinal = function(){
