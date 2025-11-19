@@ -561,13 +561,12 @@
           else agg[qi].X++;
           agg[qi].total++;
 
-          // Determine whether this response was correct by comparing to the
-          // authoritative answer in the `questions` array.
-          const correctAnswerIsO = !!(questions[qi] && questions[qi].answer);
-          const isCorrect = ((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0;
-          agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;
-
-          // Group by submission_id (from meta if necessary) then session_id so a
+            // Determine whether this response was correct by comparing to the
+            // authoritative answer in the `questions` array.
+            // Special case: question 5 (index 4) accepts both O and X as correct
+            const correctAnswerIsO = !!(questions[qi] && questions[qi].answer);
+            const isCorrect = (qi === 4) ? 1 : (((ans === 'O' || ans === 'TRUE' || ans === 'T') === correctAnswerIsO) ? 1 : 0);
+            agg[qi].correctCount = (agg[qi].correctCount || 0) + isCorrect;          // Group by submission_id (from meta if necessary) then session_id so a
           // single participant's answers across multiple questions count as
           // one participant rather than being counted once per question.
           const sessionKey = (r.meta && r.meta.submission_id) || r.submission_id || r.session_id || `row_${i}`;
