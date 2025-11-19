@@ -340,7 +340,13 @@
       try{ alignNextToReset(); }catch(e){}
     }
     function nextQuestion(){ current++; if(current < questions.length) loadQuestion(); else showFinal(); }
-    function showFinal(){ document.getElementById('explanationBox').classList.add('hidden'); document.getElementById('finalScreen').classList.remove('hidden'); const percent = questions.length>0? Math.round((score/questions.length)*100):0; document.getElementById('finalResult').textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; }
+    function showFinal(){ 
+      document.getElementById('explanationBox').classList.add('hidden'); 
+      document.getElementById('finalScreen').classList.remove('hidden'); 
+      const percent = questions.length>0? Math.round((score/questions.length)*100):0; 
+      const congratsMsg = percent >= 60 ? '축하합니다!' : '아쉽습니다.\n다시 도전해보세요!';
+      document.getElementById('finalResult').textContent = `${congratsMsg}\n\n총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; 
+    }
 
     // stop bgm when showing final screen
     (function(){
