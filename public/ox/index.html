@@ -137,7 +137,8 @@
   <img class="site-logo" src="제목 없음.png" alt="기관 로고" />
   <!-- final image moved to the bottom to match other screens -->
       <div class="final-center">
-        <div id="finalResult" class="text-3xl font-extrabold"></div>
+        <div id="finalCongrats" class="text-3xl font-extrabold mb-2"></div>
+        <div id="finalResult" class="text-2xl font-bold"></div>
         <p class="text-xl font-bold text-blue-600">경상북도 이동편의시설 기술지원센터는</p>
         <p class="text-xl font-bold text-blue-600">교통약자의 이동 편의를 위한 전문 기술을 지원하는 기관입니다.</p>
   <button id="resetBtn" class="reset-btn final-button bg-gray-600 text-white px-4 py-2 rounded-md" onclick="resetToIntro()">🔄 처음으로</button>
@@ -345,7 +346,8 @@
       document.getElementById('finalScreen').classList.remove('hidden'); 
       const percent = questions.length>0? Math.round((score/questions.length)*100):0; 
       const congratsMsg = percent >= 60 ? '축하합니다!' : '아쉽습니다.\n다시 도전해보세요!';
-      document.getElementById('finalResult').textContent = `${congratsMsg}\n\n총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; 
+      document.getElementById('finalCongrats').textContent = congratsMsg;
+      document.getElementById('finalResult').textContent = `총 ${questions.length}문제 중 ${score}개 맞추셨습니다! (${percent}점)`; 
     }
 
     // stop bgm when showing final screen
