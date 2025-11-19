@@ -231,7 +231,7 @@
     let soundCorrect = null, soundWrong = null, soundStart = null, soundBgm = null;
     try{
       // Use explicit relative paths so the browser loads files from /ox/
-      soundCorrect = new Audio('./정답.mp3'); soundCorrect.preload = 'auto';
+      soundCorrect = new Audio('./정답.mp3'); soundCorrect.preload = 'auto'; soundCorrect.volume = 0.8;
       soundWrong = new Audio('./오답.mp3'); soundWrong.preload = 'auto';
       soundStart = new Audio('./시작.mp3'); soundStart.preload = 'auto';
       // Background music: loop during the quiz
