@@ -170,17 +170,17 @@
     // 볼라드 (장애물) - 시작점과 끝점에 일자로 배치
     const bollards = [];
     const bollardSize = 15;
-    const bollardSpacing = 70; // 간격 2배로 증가
-    const startY = canvas.height - 50; // 시작점 (하단)
-    const endY = 50; // 끝점 (상단)
+    const bollardSpacing = 55; // 간격 2배로 증가
+    const startY = canvas.height - 130; // 시작점 (하단)
+    const endY = 130; // 끝점 (상단)
     
     // 시작점 볼라드 (하단 일자)
-    for (let x = 80; x < canvas.width - 80; x += bollardSpacing) {
+    for (let x = 60; x < canvas.width - 60; x += bollardSpacing) {
       bollards.push({ x: x, y: startY, width: bollardSize, height: bollardSize });
     }
     
     // 끝점 볼라드 (상단 일자)
-    for (let x = 80; x < canvas.width - 80; x += bollardSpacing) {
+    for (let x = 60; x < canvas.width - 60; x += bollardSpacing) {
       bollards.push({ x: x, y: endY, width: bollardSize, height: bollardSize });
     }
 
