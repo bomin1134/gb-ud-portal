@@ -150,6 +150,10 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
+    // 플레이어 이미지 로드
+    const playerImage = new Image();
+    playerImage.src = 'game/캐릭터.png';
+
     // 게임 상태
     let gameState = 'start'; // start, playing, end
     let timeLeft = 0;
@@ -160,13 +164,14 @@
     const player = {
       x: canvas.width / 2,
       y: canvas.height - 65,
-      width: 24,
-      height: 24,
+      width: 30, // 이미지 크기에 맞춤
+      height: 30,
       velocityX: 0,
       velocityY: 0,
       acceleration: 0.4,
       friction: 0.92,
-      maxSpeed: 4
+      maxSpeed: 4,
+      image: playerImage
     };
 
     // 차선 설정
@@ -670,22 +675,25 @@
         }
       });
       
-      // 플레이어 (휠체어)
-      ctx.fillStyle = '#3498db';
-      ctx.fillRect(
-        player.x - player.width / 2,
-        player.y - player.height / 2,
-        player.width,
-        player.height
-      );
-      ctx.strokeStyle = '#2980b9';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        player.x - player.width / 2,
-        player.y - player.height / 2,
-        player.width,
-        player.height
-      );
+      // 플레이어 (캐릭터 이미지)
+      if (player.image.complete) {
+        ctx.drawImage(
+          player.image,
+          player.x - player.width / 2,
+          player.y - player.height / 2,
+          player.width,
+          player.height
+        );
+      } else {
+        // 이미지 로딩 중이면 임시로 사각형 표시
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(
+          player.x - player.width / 2,
+          player.y - player.height / 2,
+          player.width,
+          player.height
+        );
+      }
     }
 
     // 게임 루프
