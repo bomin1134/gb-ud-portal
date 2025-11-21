@@ -159,7 +159,7 @@
     // 플레이어
     const player = {
       x: canvas.width / 2,
-      y: canvas.height - 100,
+      y: canvas.height - 65,
       width: 24,
       height: 24,
       velocityX: 0,
@@ -313,7 +313,7 @@
 
     function resetPlayer() {
       player.x = canvas.width / 2;
-      player.y = canvas.height - 80; // 시작점 볼라드 위쪽
+      player.y = canvas.height - 65; // 15px 뒤로 이동 (80 -> 65)
       player.velocityX = 0;
       player.velocityY = 0;
     }
@@ -549,21 +549,45 @@
       ctx.fillStyle = '#4a4a4a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // 차선 그리기 (중앙 점선)
-      ctx.fillStyle = '#ffffff';
+      // 차선 그리기
       const dashSize = 15;
       const dashGap = 15;
       
-      // 1차선 상단 외곽선
+      // 1차선 상단 외곽선 (노란색)
+      ctx.fillStyle = '#f1c40f';
       for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-        ctx.fillRect(x, laneTop - 1, dashSize, 2);
+        ctx.fillRect(x, laneTop - 1, dashSize, 3);
       }
       
       // 차선 구분선
       for (let i = 0; i < 4; i++) {
         const lineY = laneTop + laneHeight * (i + 1);
-        for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-          ctx.fillRect(x, lineY - 1, dashSize, 2);
+        
+        // 중앙선 2줄 (인덱스 1, 2)은 노란색 이중선
+        if (i === 1 || i === 2) {
+          ctx.fillStyle = '#f1c40f';
+          // 위쪽 선
+          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+            ctx.fillRect(x, lineY - 3, dashSize, 2);
+          }
+          // 아래쪽 선
+          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+            ctx.fillRect(x, lineY + 1, dashSize, 2);
+          }
+        }
+        // 마지막 줄 (인덱스 3)은 노란색
+        else if (i === 3) {
+          ctx.fillStyle = '#f1c40f';
+          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+            ctx.fillRect(x, lineY - 1, dashSize, 3);
+          }
+        }
+        // 나머지 (인덱스 0)는 흰색
+        else {
+          ctx.fillStyle = '#ffffff';
+          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+            ctx.fillRect(x, lineY - 1, dashSize, 2);
+          }
         }
       }
       
