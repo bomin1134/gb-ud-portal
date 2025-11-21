@@ -63,14 +63,49 @@
     /* UI 오버레이 */
     #ui {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: -45px;
+      left: 0;
+      width: 100%;
+      background: #34495e;
+      padding: 8px 15px;
+      box-sizing: border-box;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       color: white;
-      font-size: 18px;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      font-size: 16px;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+      border-bottom: 3px solid #2c3e50;
     }
-    #timer {
-      display: none; /* 타이머 비활성화 */
+    #coinDisplay {
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #timerContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+    #timerText {
+      font-size: 14px;
+      font-weight: bold;
+    }
+    #timeBar {
+      width: 150px;
+      height: 8px;
+      background: #2c3e50;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 1px solid #1a1a1a;
+    }
+    #timeBarFill {
+      height: 100%;
+      background: linear-gradient(90deg, #2ecc71, #f1c40f, #e74c3c);
+      transition: width 0.3s linear;
+      width: 100%;
     }
 
     /* 시작/종료 화면 */
@@ -121,8 +156,16 @@
     
     <!-- UI -->
     <div id="ui">
-      <div style="font-size: 20px; font-weight: bold;">🪙 코인: <span id="coinCount">0</span></div>
-      <div id="timer">시간: <span id="timeLeft">0</span>초</div>
+      <div id="coinDisplay">
+        <span>🪙</span>
+        <span id="coinCount">0</span>
+      </div>
+      <div id="timerContainer">
+        <div id="timerText">⏱️ <span id="timeLeft">40</span>초</div>
+        <div id="timeBar">
+          <div id="timeBarFill"></div>
+        </div>
+      </div>
     </div>
 
     <!-- 조이스틱 -->
@@ -158,16 +201,17 @@
 
     // 게임 상태
     let gameState = 'start'; // start, playing, end
-    let timeLeft = 0;
-    let timerEnabled = false; // 타이머 비활성화
+    let timeLeft = 40;
+    let timerEnabled = true; // 타이머 활성화
     let coinCount = 0;
+    let maxTime = 40;
 
     // 플레이어
     const player = {
       x: canvas.width / 2,
       y: canvas.height - 65,
-      width: 25, // 히트박스 크기 (줄임)
-      height: 25,
+      width: 28, // 히트박스 크기 (줄임)
+      height: 28,
       displayWidth: 40, // 화면에 보이는 크기 (키움)
       displayHeight: 40,
       velocityX: 0,
@@ -307,7 +351,8 @@
       resetPlayer();
       spawnInitialCoins();
       if (timerEnabled) {
-        timeLeft = 60;
+        timeLeft = maxTime;
+        document.getElementById('timeLeft').textContent = timeLeft;
         startTimer();
       }
       gameLoop();
@@ -324,7 +369,8 @@
       resetPlayer();
       spawnInitialCoins();
       if (timerEnabled) {
-        timeLeft = 60;
+        timeLeft = maxTime;
+        document.getElementById('timeLeft').textContent = timeLeft;
         startTimer();
       }
       gameLoop(); // 게임 루프 재시작
@@ -404,7 +450,7 @@
       }
     }
 
-    // 타이머 (비활성화)
+    // 타이머
     function startTimer() {
       const interval = setInterval(() => {
         if (gameState !== 'playing') {
@@ -413,8 +459,13 @@
         }
         timeLeft--;
         document.getElementById('timeLeft').textContent = timeLeft;
+        
+        // 타임바 업데이트
+        const percentage = (timeLeft / maxTime) * 100;
+        document.getElementById('timeBarFill').style.width = percentage + '%';
+        
         if (timeLeft <= 0) {
-          endGame(false);
+          endGame(false, '시간 초과!');
           clearInterval(interval);
         }
       }, 1000);
