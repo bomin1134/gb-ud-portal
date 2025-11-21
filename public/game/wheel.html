@@ -193,7 +193,7 @@
     // 볼라드 (장애물) - 시작점과 끝점에 일자로 배치
     const bollards = [];
     const bollardRadius = 8; // 원의 반지름
-    const bollardSpacing = 60;
+    const bollardSpacing = 50; // 간격 줄임
     const startY = canvas.height - 100; // 시작점 (하단)
     const endY = 100; // 끝점 (상단)
     
@@ -367,11 +367,16 @@
     }
 
     // 차량 업데이트
+    let lastUpdateTime = Date.now();
     function updateCars() {
+      const currentTime = Date.now();
+      const deltaTime = (currentTime - lastUpdateTime) / 16.67; // 60fps 기준 정규화
+      lastUpdateTime = currentTime;
+      
       spawnCar();
       
       for (let i = cars.length - 1; i >= 0; i--) {
-        cars[i].x += cars[i].speed;
+        cars[i].x += cars[i].speed * deltaTime;
         
         // 화면 밖으로 나간 차량 제거
         if (cars[i].x < -carWidth - 50 || cars[i].x > canvas.width + 50) {
