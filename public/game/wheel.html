@@ -121,6 +121,7 @@
     
     <!-- UI -->
     <div id="ui">
+      <div style="font-size: 20px; font-weight: bold;">🪙 코인: <span id="coinCount">0</span></div>
       <div id="timer">시간: <span id="timeLeft">0</span>초</div>
     </div>
 
@@ -131,9 +132,9 @@
 
     <!-- 시작 화면 -->
     <div id="startScreen" class="screen">
-      <h1>🦽 휠체어 보도 모험</h1>
-      <p>볼라드 사이를 통과해서 결승선에 도착하세요!</p>
-      <p style="font-size: 16px; color: #bdc3c7;">조이스틱으로 이동 (관성 시스템)</p>
+      <h1>🦽 횡단보도 건너기</h1>
+      <p>차를 피해 코인을 모으며 건너편으로!</p>
+      <p style="font-size: 16px; color: #bdc3c7;">조이스틱으로 이동</p>
       <button onclick="startGame()">시작하기</button>
     </div>
 
@@ -153,6 +154,7 @@
     let gameState = 'start'; // start, playing, end
     let timeLeft = 0;
     let timerEnabled = false; // 타이머 비활성화
+    let coinCount = 0;
 
     // 플레이어
     const player = {
@@ -167,10 +169,31 @@
       maxSpeed: 4
     };
 
+    // 차선 설정
+    const laneTop = 120; // 상단 볼라드 아래
+    const laneBottom = canvas.height - 120; // 하단 볼라드 위
+    const laneHeight = (laneBottom - laneTop) / 4;
+    
+    const lanes = [
+      { y: laneTop + laneHeight * 0.5, direction: 1 }, // 하단1: 왼→오
+      { y: laneTop + laneHeight * 1.5, direction: 1 }, // 하단2: 왼→오
+      { y: laneTop + laneHeight * 2.5, direction: -1 }, // 상단1: 오→왼
+      { y: laneTop + laneHeight * 3.5, direction: -1 }  // 상단2: 오→왼
+    ];
+
+    // 차량 배열
+    const cars = [];
+    const carWidth = 40;
+    const carHeight = 20;
+
+    // 코인 배열
+    const coins = [];
+    const coinSize = 12;
+
     // 볼라드 (장애물) - 시작점과 끝점에 일자로 배치
     const bollards = [];
     const bollardSize = 15;
-    const bollardSpacing = 55; // 간격 2배로 증가
+    const bollardSpacing = 70;
     const startY = canvas.height - 100; // 시작점 (하단)
     const endY = 100; // 끝점 (상단)
     
@@ -185,7 +208,7 @@
     }
 
     // 결승선
-    const finishLine = 30;
+    const finishLine = 80;
 
     // 조이스틱
     const joystick = document.getElementById('joystick');
@@ -258,7 +281,12 @@
     function startGame() {
       document.getElementById('startScreen').style.display = 'none';
       gameState = 'playing';
+      coinCount = 0;
+      document.getElementById('coinCount').textContent = coinCount;
+      cars.length = 0;
+      coins.length = 0;
       resetPlayer();
+      spawnInitialCoins();
       if (timerEnabled) {
         timeLeft = 60;
         startTimer();
@@ -270,7 +298,12 @@
     function resetGame() {
       document.getElementById('endScreen').style.display = 'none';
       gameState = 'playing';
+      coinCount = 0;
+      document.getElementById('coinCount').textContent = coinCount;
+      cars.length = 0;
+      coins.length = 0;
       resetPlayer();
+      spawnInitialCoins();
       if (timerEnabled) {
         timeLeft = 60;
         startTimer();
@@ -280,9 +313,58 @@
 
     function resetPlayer() {
       player.x = canvas.width / 2;
-      player.y = canvas.height - 100; // 시작점 볼라드 위쪽
+      player.y = canvas.height - 80; // 시작점 볼라드 위쪽
       player.velocityX = 0;
       player.velocityY = 0;
+    }
+
+    // 초기 코인 생성 (오른쪽 아래)
+    function spawnInitialCoins() {
+      for (let i = 0; i < 3; i++) {
+        coins.push({
+          x: canvas.width - 80 + Math.random() * 40,
+          y: canvas.height - 200 + i * 30,
+          collected: false
+        });
+      }
+    }
+
+    // 차량 생성
+    let lastCarSpawn = 0;
+    function spawnCar() {
+      const now = Date.now();
+      if (now - lastCarSpawn < 800) return; // 최소 간격
+      
+      const randomInterval = Math.random() * 1500; // 불규칙 타이밍
+      if (Math.random() < 0.3) { // 30% 확률로 생성
+        const lane = lanes[Math.floor(Math.random() * lanes.length)];
+        const speed = 1.5 + Math.random() * 1.5; // 불규칙 속도 (1.5~3)
+        
+        cars.push({
+          x: lane.direction === 1 ? -carWidth : canvas.width + carWidth,
+          y: lane.y,
+          width: carWidth,
+          height: carHeight,
+          speed: speed * lane.direction,
+          lane: lane
+        });
+        
+        lastCarSpawn = now;
+      }
+    }
+
+    // 차량 업데이트
+    function updateCars() {
+      spawnCar();
+      
+      for (let i = cars.length - 1; i >= 0; i--) {
+        cars[i].x += cars[i].speed;
+        
+        // 화면 밖으로 나간 차량 제거
+        if (cars[i].x < -carWidth - 50 || cars[i].x > canvas.width + 50) {
+          cars.splice(i, 1);
+        }
+      }
     }
 
     // 타이머 (비활성화)
@@ -344,6 +426,7 @@
 
     // 충돌 감지
     function checkCollisions() {
+      // 볼라드 충돌
       bollards.forEach(bollard => {
         if (isColliding(player, bollard)) {
           // 튕겨내기
@@ -360,10 +443,50 @@
         }
       });
       
+      // 차량 충돌
+      cars.forEach(car => {
+        if (isCollidingCar(player, car)) {
+          endGame(false, '차량에 부딪혔습니다!');
+        }
+      });
+      
+      // 코인 수집
+      coins.forEach(coin => {
+        if (!coin.collected && isCollidingCoin(player, coin)) {
+          coin.collected = true;
+          coinCount++;
+          document.getElementById('coinCount').textContent = coinCount;
+        }
+      });
+      
       // 결승선 체크
       if (player.y < finishLine) {
-        endGame(true);
+        endGame(true, `코인 ${coinCount}개를 모았습니다!`);
       }
+    }
+
+    function isCollidingCar(p, car) {
+      const pLeft = p.x - p.width / 2;
+      const pRight = p.x + p.width / 2;
+      const pTop = p.y - p.height / 2;
+      const pBottom = p.y + p.height / 2;
+      
+      const cLeft = car.x - car.width / 2;
+      const cRight = car.x + car.width / 2;
+      const cTop = car.y - car.height / 2;
+      const cBottom = car.y + car.height / 2;
+      
+      return pLeft < cRight &&
+             pRight > cLeft &&
+             pTop < cBottom &&
+             pBottom > cTop;
+    }
+
+    function isCollidingCoin(p, coin) {
+      const dx = p.x - coin.x;
+      const dy = p.y - coin.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < (p.width / 2 + coinSize);
     }
 
     function isColliding(rect1, rect2) {
@@ -384,7 +507,7 @@
     }
 
     // 게임 종료
-    function endGame(victory) {
+    function endGame(victory, message) {
       gameState = 'end';
       const endScreen = document.getElementById('endScreen');
       const endTitle = document.getElementById('endTitle');
@@ -392,10 +515,10 @@
       
       if (victory) {
         endTitle.textContent = '🎉 성공!';
-        endMessage.textContent = '결승선에 도착했습니다!';
+        endMessage.textContent = message || '결승선에 도착했습니다!';
       } else {
-        endTitle.textContent = '⏰ 시간 종료';
-        endMessage.textContent = '시간이 다 되었습니다. 다시 도전하세요!';
+        endTitle.textContent = '💥 실패';
+        endMessage.textContent = message || '다시 도전하세요!';
       }
       
       endScreen.style.display = 'flex';
@@ -407,8 +530,21 @@
       ctx.fillStyle = '#4a4a4a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // 양쪽 점선 (도로 경계)
+      // 차선 그리기 (중앙 점선)
       ctx.fillStyle = '#ffffff';
+      const dashSize = 15;
+      const dashGap = 15;
+      
+      for (let i = 0; i < 4; i++) {
+        const lineY = laneTop + laneHeight * (i + 1);
+        if (i < 3) { // 마지막 라인은 그리지 않음
+          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+            ctx.fillRect(x, lineY - 1, dashSize, 2);
+          }
+        }
+      }
+      
+      // 양쪽 점선 (도로 경계)
       const dotSize = 6;
       const dotSpacing = 20;
       const margin = 15;
@@ -440,7 +576,48 @@
         ctx.strokeRect(bollard.x, bollard.y, bollard.width, bollard.height);
       });
       
-      // 플레이어 (임시 사각형 - 나중에 픽셀아트로 교체)
+      // 차량
+      cars.forEach(car => {
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(
+          car.x - car.width / 2,
+          car.y - car.height / 2,
+          car.width,
+          car.height
+        );
+        ctx.strokeStyle = '#d35400';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          car.x - car.width / 2,
+          car.y - car.height / 2,
+          car.width,
+          car.height
+        );
+        
+        // 창문 표시
+        ctx.fillStyle = '#34495e';
+        ctx.fillRect(
+          car.x - car.width / 4,
+          car.y - car.height / 3,
+          car.width / 2,
+          car.height / 2
+        );
+      });
+      
+      // 코인
+      coins.forEach(coin => {
+        if (!coin.collected) {
+          ctx.fillStyle = '#f1c40f';
+          ctx.beginPath();
+          ctx.arc(coin.x, coin.y, coinSize, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#f39c12';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      });
+      
+      // 플레이어 (휠체어)
       ctx.fillStyle = '#3498db';
       ctx.fillRect(
         player.x - player.width / 2,
@@ -463,6 +640,7 @@
       if (gameState !== 'playing') return;
       
       updatePhysics();
+      updateCars();
       checkCollisions();
       draw();
       
