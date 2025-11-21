@@ -583,21 +583,6 @@
         }
       }
       
-      // 양쪽 점선 (도로 경계)
-      const dotSize = 6;
-      const dotSpacing = 20;
-      const margin = 15;
-      
-      // 왼쪽 점선
-      for (let y = 0; y < canvas.height; y += dotSpacing) {
-        ctx.fillRect(margin, y, dotSize, dotSize);
-      }
-      
-      // 오른쪽 점선
-      for (let y = 0; y < canvas.height; y += dotSpacing) {
-        ctx.fillRect(canvas.width - margin - dotSize, y, dotSize, dotSize);
-      }
-      
       // 결승선 (체커보드 패턴)
       const checkSize = 20; // 각 사각형 크기
       const finishHeight = 15;
