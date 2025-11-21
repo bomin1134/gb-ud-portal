@@ -208,7 +208,7 @@
     }
 
     // 결승선
-    const finishLine = 80;
+    const finishLine = 60; // 20px 위로 이동
 
     // 조이스틱
     const joystick = document.getElementById('joystick');
@@ -598,13 +598,27 @@
         ctx.fillRect(canvas.width - margin - dotSize, y, dotSize, dotSize);
       }
       
-      // 결승선 (노란색 라인)
+      // 결승선 (체커보드 패턴)
+      const checkSize = 20; // 각 사각형 크기
+      const finishHeight = 15;
+      const finishY = finishLine - finishHeight / 2;
+      
+      for (let x = 0; x < canvas.width; x += checkSize) {
+        for (let y = 0; y < finishHeight; y += checkSize) {
+          const isWhite = (Math.floor(x / checkSize) + Math.floor(y / checkSize)) % 2 === 0;
+          ctx.fillStyle = isWhite ? '#ffffff' : '#000000';
+          ctx.fillRect(x, finishY + y, checkSize, Math.min(checkSize, finishHeight - y));
+        }
+      }
+      
+      // "결승선" 텍스트
       ctx.fillStyle = '#f1c40f';
-      ctx.fillRect(0, finishLine - 5, canvas.width, 10);
-      ctx.fillStyle = '#2c3e50';
       ctx.font = 'bold 16px Jua';
       ctx.textAlign = 'center';
-      ctx.fillText('결승선', canvas.width / 2, finishLine + 20);
+      ctx.strokeStyle = '#2c3e50';
+      ctx.lineWidth = 3;
+      ctx.strokeText('결승선', canvas.width / 2, finishLine + 25);
+      ctx.fillText('결승선', canvas.width / 2, finishLine + 25);
       
       // 볼라드 (원형, 검정색 + 노란 테두리)
       bollards.forEach(bollard => {
