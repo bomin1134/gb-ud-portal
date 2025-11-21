@@ -170,17 +170,17 @@
     // 볼라드 (장애물) - 시작점과 끝점에 일자로 배치
     const bollards = [];
     const bollardSize = 15;
-    const bollardSpacing = 35;
+    const bollardSpacing = 70; // 간격 2배로 증가
     const startY = canvas.height - 50; // 시작점 (하단)
     const endY = 50; // 끝점 (상단)
     
     // 시작점 볼라드 (하단 일자)
-    for (let x = 30; x < canvas.width - 30; x += bollardSpacing) {
+    for (let x = 80; x < canvas.width - 80; x += bollardSpacing) {
       bollards.push({ x: x, y: startY, width: bollardSize, height: bollardSize });
     }
     
     // 끝점 볼라드 (상단 일자)
-    for (let x = 30; x < canvas.width - 30; x += bollardSpacing) {
+    for (let x = 80; x < canvas.width - 80; x += bollardSpacing) {
       bollards.push({ x: x, y: endY, width: bollardSize, height: bollardSize });
     }
 
@@ -367,10 +367,20 @@
     }
 
     function isColliding(rect1, rect2) {
-      return rect1.x < rect2.x + rect2.width &&
-             rect1.x + rect1.width > rect2.x &&
-             rect1.y < rect2.y + rect2.height &&
-             rect1.y + rect1.height > rect2.y;
+      const r1Left = rect1.x - rect1.width / 2;
+      const r1Right = rect1.x + rect1.width / 2;
+      const r1Top = rect1.y - rect1.height / 2;
+      const r1Bottom = rect1.y + rect1.height / 2;
+      
+      const r2Left = rect2.x;
+      const r2Right = rect2.x + rect2.width;
+      const r2Top = rect2.y;
+      const r2Bottom = rect2.y + rect2.height;
+      
+      return r1Left < r2Right &&
+             r1Right > r2Left &&
+             r1Top < r2Bottom &&
+             r1Bottom > r2Top;
     }
 
     // 게임 종료
@@ -396,14 +406,6 @@
       // 배경 (회색 도로)
       ctx.fillStyle = '#4a4a4a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // 횡단보도 흰색 줄무늬
-      ctx.fillStyle = '#ffffff';
-      const stripeWidth = 30;
-      const stripeGap = 10;
-      for (let y = 0; y < canvas.height; y += stripeWidth + stripeGap) {
-        ctx.fillRect(0, y, canvas.width, stripeWidth);
-      }
       
       // 양쪽 점선 (도로 경계)
       ctx.fillStyle = '#ffffff';
