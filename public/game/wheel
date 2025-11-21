@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>휠체어 보도 모험</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      overflow: hidden;
+      background: #2c3e50;
+      font-family: 'Jua', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      touch-action: none;
+    }
+    #gameContainer {
+      position: relative;
+      background: #34495e;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    }
+    canvas {
+      display: block;
+      background: #95a5a6;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    
+    /* 조이스틱 */
+    #joystick {
+      position: absolute;
+      bottom: 40px;
+      left: 40px;
+      width: 120px;
+      height: 120px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.4);
+      display: none;
+    }
+    #joystick.active {
+      display: block;
+    }
+    #stick {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      background: rgba(255,255,255,0.6);
+      border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.8);
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transition: all 0.1s;
+    }
+
+    /* UI 오버레이 */
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+      font-size: 18px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+    }
+    #timer {
+      display: none; /* 타이머 비활성화 */
+    }
+
+    /* 시작/종료 화면 */
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      z-index: 10;
+    }
+    .screen h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    .screen p {
+      font-size: 20px;
+      margin: 10px 0;
+    }
+    .screen button {
+      margin-top: 20px;
+      padding: 15px 40px;
+      font-size: 24px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: 'Jua', sans-serif;
+    }
+    .screen button:hover {
+      background: #2980b9;
+    }
+    #endScreen {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    
+    <!-- UI -->
+    <div id="ui">
+      <div id="timer">시간: <span id="timeLeft">0</span>초</div>
+    </div>
+
+    <!-- 조이스틱 -->
+    <div id="joystick">
+      <div id="stick"></div>
+    </div>
+
+    <!-- 시작 화면 -->
+    <div id="startScreen" class="screen">
+      <h1>🦽 휠체어 보도 모험</h1>
+      <p>볼라드 사이를 통과해서 결승선에 도착하세요!</p>
+      <p style="font-size: 16px; color: #bdc3c7;">조이스틱으로 이동 (관성 시스템)</p>
+      <button onclick="startGame()">시작하기</button>
+    </div>
+
+    <!-- 종료 화면 -->
+    <div id="endScreen" class="screen">
+      <h1 id="endTitle">성공!</h1>
+      <p id="endMessage">결승선에 도착했습니다!</p>
+      <button onclick="resetGame()">다시 하기</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 게임 상태
+    let gameState = 'start'; // start, playing, end
+    let timeLeft = 0;
+    let timerEnabled = false; // 타이머 비활성화
+
+    // 플레이어
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 80,
+      width: 24,
+      height: 24,
+      velocityX: 0,
+      velocityY: 0,
+      acceleration: 0.4,
+      friction: 0.92,
+      maxSpeed: 4
+    };
+
+    // 볼라드 (장애물)
+    const bollards = [
+      // 구간 1
+      { x: 80, y: 500, width: 20, height: 20 },
+      { x: 300, y: 500, width: 20, height: 20 },
+      
+      // 구간 2
+      { x: 120, y: 400, width: 20, height: 20 },
+      { x: 260, y: 400, width: 20, height: 20 },
+      
+      // 구간 3
+      { x: 100, y: 300, width: 20, height: 20 },
+      { x: 280, y: 300, width: 20, height: 20 },
+      
+      // 구간 4 (좁아짐)
+      { x: 140, y: 200, width: 20, height: 20 },
+      { x: 240, y: 200, width: 20, height: 20 },
+      
+      // 구간 5
+      { x: 90, y: 100, width: 20, height: 20 },
+      { x: 290, y: 100, width: 20, height: 20 },
+    ];
+
+    // 결승선
+    const finishLine = 50;
+
+    // 조이스틱
+    const joystick = document.getElementById('joystick');
+    const stick = document.getElementById('stick');
+    let joystickActive = false;
+    let joystickInput = { x: 0, y: 0 };
+
+    // 터치 이벤트
+    canvas.addEventListener('touchstart', handleTouchStart);
+    canvas.addEventListener('touchmove', handleTouchMove);
+    canvas.addEventListener('touchend', handleTouchEnd);
+
+    function handleTouchStart(e) {
+      e.preventDefault();
+      if (gameState !== 'playing') return;
+      
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const touchX = touch.clientX - rect.left;
+      const touchY = touch.clientY - rect.top;
+      
+      // 조이스틱 활성화
+      joystick.style.left = touchX - 60 + 'px';
+      joystick.style.top = touchY - 60 + 'px';
+      joystick.classList.add('active');
+      joystickActive = true;
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault();
+      if (!joystickActive) return;
+      
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      const touchX = touch.clientX - rect.left;
+      const touchY = touch.clientY - rect.top;
+      
+      const joystickRect = joystick.getBoundingClientRect();
+      const centerX = joystickRect.left + joystickRect.width / 2 - rect.left;
+      const centerY = joystickRect.top + joystickRect.height / 2 - rect.top;
+      
+      let deltaX = touchX - centerX;
+      let deltaY = touchY - centerY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const maxDistance = 35;
+      
+      if (distance > maxDistance) {
+        const angle = Math.atan2(deltaY, deltaX);
+        deltaX = Math.cos(angle) * maxDistance;
+        deltaY = Math.sin(angle) * maxDistance;
+      }
+      
+      stick.style.left = (60 + deltaX) + 'px';
+      stick.style.top = (60 + deltaY) + 'px';
+      
+      joystickInput.x = deltaX / maxDistance;
+      joystickInput.y = deltaY / maxDistance;
+    }
+
+    function handleTouchEnd(e) {
+      e.preventDefault();
+      joystick.classList.remove('active');
+      joystickActive = false;
+      stick.style.left = '50%';
+      stick.style.top = '50%';
+      joystickInput = { x: 0, y: 0 };
+    }
+
+    // 게임 시작
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      gameState = 'playing';
+      resetPlayer();
+      if (timerEnabled) {
+        timeLeft = 60;
+        startTimer();
+      }
+      gameLoop();
+    }
+
+    // 게임 리셋
+    function resetGame() {
+      document.getElementById('endScreen').style.display = 'none';
+      gameState = 'playing';
+      resetPlayer();
+      if (timerEnabled) {
+        timeLeft = 60;
+        startTimer();
+      }
+    }
+
+    function resetPlayer() {
+      player.x = canvas.width / 2;
+      player.y = canvas.height - 80;
+      player.velocityX = 0;
+      player.velocityY = 0;
+    }
+
+    // 타이머 (비활성화)
+    function startTimer() {
+      const interval = setInterval(() => {
+        if (gameState !== 'playing') {
+          clearInterval(interval);
+          return;
+        }
+        timeLeft--;
+        document.getElementById('timeLeft').textContent = timeLeft;
+        if (timeLeft <= 0) {
+          endGame(false);
+          clearInterval(interval);
+        }
+      }, 1000);
+    }
+
+    // 물리 업데이트
+    function updatePhysics() {
+      // 조이스틱 입력에 따른 가속
+      player.velocityX += joystickInput.x * player.acceleration;
+      player.velocityY += joystickInput.y * player.acceleration;
+      
+      // 속도 제한
+      const speed = Math.sqrt(player.velocityX ** 2 + player.velocityY ** 2);
+      if (speed > player.maxSpeed) {
+        const ratio = player.maxSpeed / speed;
+        player.velocityX *= ratio;
+        player.velocityY *= ratio;
+      }
+      
+      // 마찰력 적용
+      player.velocityX *= player.friction;
+      player.velocityY *= player.friction;
+      
+      // 위치 업데이트
+      player.x += player.velocityX;
+      player.y += player.velocityY;
+      
+      // 화면 경계 제한
+      if (player.x < player.width / 2) {
+        player.x = player.width / 2;
+        player.velocityX = 0;
+      }
+      if (player.x > canvas.width - player.width / 2) {
+        player.x = canvas.width - player.width / 2;
+        player.velocityX = 0;
+      }
+      if (player.y < player.height / 2) {
+        player.y = player.height / 2;
+        player.velocityY = 0;
+      }
+      if (player.y > canvas.height - player.height / 2) {
+        player.y = canvas.height - player.height / 2;
+        player.velocityY = 0;
+      }
+    }
+
+    // 충돌 감지
+    function checkCollisions() {
+      bollards.forEach(bollard => {
+        if (isColliding(player, bollard)) {
+          // 튕겨내기
+          const dx = player.x - (bollard.x + bollard.width / 2);
+          const dy = player.y - (bollard.y + bollard.height / 2);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance > 0) {
+            const pushX = (dx / distance) * 3;
+            const pushY = (dy / distance) * 3;
+            player.velocityX = pushX;
+            player.velocityY = pushY;
+          }
+        }
+      });
+      
+      // 결승선 체크
+      if (player.y < finishLine) {
+        endGame(true);
+      }
+    }
+
+    function isColliding(rect1, rect2) {
+      return rect1.x < rect2.x + rect2.width &&
+             rect1.x + rect1.width > rect2.x &&
+             rect1.y < rect2.y + rect2.height &&
+             rect1.y + rect1.height > rect2.y;
+    }
+
+    // 게임 종료
+    function endGame(victory) {
+      gameState = 'end';
+      const endScreen = document.getElementById('endScreen');
+      const endTitle = document.getElementById('endTitle');
+      const endMessage = document.getElementById('endMessage');
+      
+      if (victory) {
+        endTitle.textContent = '🎉 성공!';
+        endMessage.textContent = '결승선에 도착했습니다!';
+      } else {
+        endTitle.textContent = '⏰ 시간 종료';
+        endMessage.textContent = '시간이 다 되었습니다. 다시 도전하세요!';
+      }
+      
+      endScreen.style.display = 'flex';
+    }
+
+    // 그리기
+    function draw() {
+      // 배경 (보도)
+      ctx.fillStyle = '#7f8c8d';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // 보도 라인
+      ctx.strokeStyle = '#95a5a6';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < canvas.height; i += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(canvas.width, i);
+        ctx.stroke();
+      }
+      
+      // 결승선
+      ctx.fillStyle = '#f1c40f';
+      ctx.fillRect(0, finishLine - 10, canvas.width, 20);
+      ctx.fillStyle = '#2c3e50';
+      ctx.font = 'bold 16px Jua';
+      ctx.textAlign = 'center';
+      ctx.fillText('결승선', canvas.width / 2, finishLine + 5);
+      
+      // 볼라드
+      ctx.fillStyle = '#e74c3c';
+      bollards.forEach(bollard => {
+        ctx.fillRect(bollard.x, bollard.y, bollard.width, bollard.height);
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bollard.x, bollard.y, bollard.width, bollard.height);
+      });
+      
+      // 플레이어 (임시 사각형 - 나중에 픽셀아트로 교체)
+      ctx.fillStyle = '#3498db';
+      ctx.fillRect(
+        player.x - player.width / 2,
+        player.y - player.height / 2,
+        player.width,
+        player.height
+      );
+      ctx.strokeStyle = '#2980b9';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        player.x - player.width / 2,
+        player.y - player.height / 2,
+        player.width,
+        player.height
+      );
+    }
+
+    // 게임 루프
+    function gameLoop() {
+      if (gameState !== 'playing') return;
+      
+      updatePhysics();
+      checkCollisions();
+      draw();
+      
+      requestAnimationFrame(gameLoop);
+    }
+  </script>
+</body>
+</html>
