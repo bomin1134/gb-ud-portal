@@ -561,8 +561,8 @@
       for (let i = 0; i < 4; i++) {
         const lineY = laneTop + laneHeight * (i + 1);
         
-        // 중앙선 2줄 (인덱스 1, 2)은 노란색 이중 실선
-        if (i === 1 || i === 2) {
+        // 중앙선 (인덱스 1만)은 노란색 이중 실선
+        if (i === 1) {
           ctx.fillStyle = '#f1c40f';
           // 위쪽 선
           ctx.fillRect(0, lineY - 3, canvas.width, 2);
@@ -574,7 +574,7 @@
           ctx.fillStyle = '#f1c40f';
           ctx.fillRect(0, lineY - 1, canvas.width, 3);
         }
-        // 나머지 (인덱스 0)는 흰색 점선
+        // 나머지 (인덱스 0, 2)는 흰색 점선
         else {
           ctx.fillStyle = '#ffffff';
           for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
