@@ -553,36 +553,28 @@
       const dashSize = 15;
       const dashGap = 15;
       
-      // 1차선 상단 외곽선 (노란색)
+      // 1차선 상단 외곽선 (노란색 실선)
       ctx.fillStyle = '#f1c40f';
-      for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-        ctx.fillRect(x, laneTop - 1, dashSize, 3);
-      }
+      ctx.fillRect(0, laneTop - 1, canvas.width, 3);
       
       // 차선 구분선
       for (let i = 0; i < 4; i++) {
         const lineY = laneTop + laneHeight * (i + 1);
         
-        // 중앙선 2줄 (인덱스 1, 2)은 노란색 이중선
+        // 중앙선 2줄 (인덱스 1, 2)은 노란색 이중 실선
         if (i === 1 || i === 2) {
           ctx.fillStyle = '#f1c40f';
           // 위쪽 선
-          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-            ctx.fillRect(x, lineY - 3, dashSize, 2);
-          }
+          ctx.fillRect(0, lineY - 3, canvas.width, 2);
           // 아래쪽 선
-          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-            ctx.fillRect(x, lineY + 1, dashSize, 2);
-          }
+          ctx.fillRect(0, lineY + 1, canvas.width, 2);
         }
-        // 마지막 줄 (인덱스 3)은 노란색
+        // 마지막 줄 (인덱스 3)은 노란색 실선
         else if (i === 3) {
           ctx.fillStyle = '#f1c40f';
-          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-            ctx.fillRect(x, lineY - 1, dashSize, 3);
-          }
+          ctx.fillRect(0, lineY - 1, canvas.width, 3);
         }
-        // 나머지 (인덱스 0)는 흰색
+        // 나머지 (인덱스 0)는 흰색 점선
         else {
           ctx.fillStyle = '#ffffff';
           for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
