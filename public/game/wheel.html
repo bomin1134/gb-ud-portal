@@ -157,7 +157,7 @@
     // 플레이어
     const player = {
       x: canvas.width / 2,
-      y: canvas.height - 80,
+      y: canvas.height - 100,
       width: 24,
       height: 24,
       velocityX: 0,
@@ -167,31 +167,25 @@
       maxSpeed: 4
     };
 
-    // 볼라드 (장애물)
-    const bollards = [
-      // 구간 1
-      { x: 80, y: 500, width: 20, height: 20 },
-      { x: 300, y: 500, width: 20, height: 20 },
-      
-      // 구간 2
-      { x: 120, y: 400, width: 20, height: 20 },
-      { x: 260, y: 400, width: 20, height: 20 },
-      
-      // 구간 3
-      { x: 100, y: 300, width: 20, height: 20 },
-      { x: 280, y: 300, width: 20, height: 20 },
-      
-      // 구간 4 (좁아짐)
-      { x: 140, y: 200, width: 20, height: 20 },
-      { x: 240, y: 200, width: 20, height: 20 },
-      
-      // 구간 5
-      { x: 90, y: 100, width: 20, height: 20 },
-      { x: 290, y: 100, width: 20, height: 20 },
-    ];
+    // 볼라드 (장애물) - 시작점과 끝점에 일자로 배치
+    const bollards = [];
+    const bollardSize = 15;
+    const bollardSpacing = 35;
+    const startY = canvas.height - 50; // 시작점 (하단)
+    const endY = 50; // 끝점 (상단)
+    
+    // 시작점 볼라드 (하단 일자)
+    for (let x = 30; x < canvas.width - 30; x += bollardSpacing) {
+      bollards.push({ x: x, y: startY, width: bollardSize, height: bollardSize });
+    }
+    
+    // 끝점 볼라드 (상단 일자)
+    for (let x = 30; x < canvas.width - 30; x += bollardSpacing) {
+      bollards.push({ x: x, y: endY, width: bollardSize, height: bollardSize });
+    }
 
     // 결승선
-    const finishLine = 50;
+    const finishLine = 30;
 
     // 조이스틱
     const joystick = document.getElementById('joystick');
@@ -281,11 +275,12 @@
         timeLeft = 60;
         startTimer();
       }
+      gameLoop(); // 게임 루프 재시작
     }
 
     function resetPlayer() {
       player.x = canvas.width / 2;
-      player.y = canvas.height - 80;
+      player.y = canvas.height - 100; // 시작점 볼라드 위쪽
       player.velocityX = 0;
       player.velocityY = 0;
     }
@@ -398,27 +393,41 @@
 
     // 그리기
     function draw() {
-      // 배경 (보도)
-      ctx.fillStyle = '#7f8c8d';
+      // 배경 (회색 도로)
+      ctx.fillStyle = '#4a4a4a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // 보도 라인
-      ctx.strokeStyle = '#95a5a6';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < canvas.height; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(canvas.width, i);
-        ctx.stroke();
+      // 횡단보도 흰색 줄무늬
+      ctx.fillStyle = '#ffffff';
+      const stripeWidth = 30;
+      const stripeGap = 10;
+      for (let y = 0; y < canvas.height; y += stripeWidth + stripeGap) {
+        ctx.fillRect(0, y, canvas.width, stripeWidth);
       }
       
-      // 결승선
+      // 양쪽 점선 (도로 경계)
+      ctx.fillStyle = '#ffffff';
+      const dotSize = 6;
+      const dotSpacing = 20;
+      const margin = 15;
+      
+      // 왼쪽 점선
+      for (let y = 0; y < canvas.height; y += dotSpacing) {
+        ctx.fillRect(margin, y, dotSize, dotSize);
+      }
+      
+      // 오른쪽 점선
+      for (let y = 0; y < canvas.height; y += dotSpacing) {
+        ctx.fillRect(canvas.width - margin - dotSize, y, dotSize, dotSize);
+      }
+      
+      // 결승선 (노란색 라인)
       ctx.fillStyle = '#f1c40f';
-      ctx.fillRect(0, finishLine - 10, canvas.width, 20);
+      ctx.fillRect(0, finishLine - 5, canvas.width, 10);
       ctx.fillStyle = '#2c3e50';
       ctx.font = 'bold 16px Jua';
       ctx.textAlign = 'center';
-      ctx.fillText('결승선', canvas.width / 2, finishLine + 5);
+      ctx.fillText('결승선', canvas.width / 2, finishLine + 20);
       
       // 볼라드
       ctx.fillStyle = '#e74c3c';
