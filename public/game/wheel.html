@@ -166,8 +166,10 @@
     const player = {
       x: canvas.width / 2,
       y: canvas.height - 65,
-      width: 30, // 이미지 크기에 맞춤
-      height: 30,
+      width: 20, // 히트박스 크기 (줄임)
+      height: 20,
+      displayWidth: 40, // 화면에 보이는 크기 (키움)
+      displayHeight: 40,
       velocityX: 0,
       velocityY: 0,
       acceleration: 0.4,
@@ -681,19 +683,19 @@
       if (player.image.complete) {
         ctx.drawImage(
           player.image,
-          player.x - player.width / 2,
-          player.y - player.height / 2,
-          player.width,
-          player.height
+          player.x - player.displayWidth / 2,
+          player.y - player.displayHeight / 2,
+          player.displayWidth,
+          player.displayHeight
         );
       } else {
         // 이미지 로딩 중이면 임시로 사각형 표시
         ctx.fillStyle = '#3498db';
         ctx.fillRect(
-          player.x - player.width / 2,
-          player.y - player.height / 2,
-          player.width,
-          player.height
+          player.x - player.displayWidth / 2,
+          player.y - player.displayHeight / 2,
+          player.displayWidth,
+          player.displayHeight
         );
       }
     }
