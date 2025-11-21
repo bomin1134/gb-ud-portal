@@ -192,19 +192,19 @@
 
     // 볼라드 (장애물) - 시작점과 끝점에 일자로 배치
     const bollards = [];
-    const bollardSize = 15;
-    const bollardSpacing = 70;
+    const bollardRadius = 8; // 원의 반지름
+    const bollardSpacing = 60;
     const startY = canvas.height - 100; // 시작점 (하단)
     const endY = 100; // 끝점 (상단)
     
     // 시작점 볼라드 (하단 일자)
     for (let x = 60; x < canvas.width - 60; x += bollardSpacing) {
-      bollards.push({ x: x, y: startY, width: bollardSize, height: bollardSize });
+      bollards.push({ x: x, y: startY, radius: bollardRadius });
     }
     
     // 끝점 볼라드 (상단 일자)
     for (let x = 60; x < canvas.width - 60; x += bollardSpacing) {
-      bollards.push({ x: x, y: endY, width: bollardSize, height: bollardSize });
+      bollards.push({ x: x, y: endY, radius: bollardRadius });
     }
 
     // 결승선
@@ -439,14 +439,15 @@
 
     // 충돌 감지
     function checkCollisions() {
-      // 볼라드 충돌
+      // 볼라드 충돌 (원형)
       bollards.forEach(bollard => {
-        if (isColliding(player, bollard)) {
-          // 튕겨내기
-          const dx = player.x - (bollard.x + bollard.width / 2);
-          const dy = player.y - (bollard.y + bollard.height / 2);
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
+        const dx = player.x - bollard.x;
+        const dy = player.y - bollard.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const minDistance = (player.width / 2) + bollard.radius;
+        
+        if (distance < minDistance) {
+          // 튱겨내기
           if (distance > 0) {
             const pushX = (dx / distance) * 3;
             const pushY = (dy / distance) * 3;
@@ -584,13 +585,18 @@
       ctx.textAlign = 'center';
       ctx.fillText('결승선', canvas.width / 2, finishLine + 20);
       
-      // 볼라드
-      ctx.fillStyle = '#e74c3c';
+      // 볼라드 (원형, 검정색 + 노란 테두리)
       bollards.forEach(bollard => {
-        ctx.fillRect(bollard.x, bollard.y, bollard.width, bollard.height);
-        ctx.strokeStyle = '#c0392b';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bollard.x, bollard.y, bollard.width, bollard.height);
+        // 검정색 안쪽
+        ctx.fillStyle = '#2c3e50';
+        ctx.beginPath();
+        ctx.arc(bollard.x, bollard.y, bollard.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // 노란 테두리 (얗게)
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 3;
+        ctx.stroke();
       });
       
       // 차량
