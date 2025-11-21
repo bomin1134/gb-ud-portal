@@ -152,7 +152,9 @@
 
     // 플레이어 이미지 로드
     const playerImage = new Image();
-    playerImage.src = 'game/캐릭터.png';
+    playerImage.src = '캐릭터.png'; // 같은 폴더 내 파일
+    playerImage.onerror = () => console.error('이미지 로드 실패: 캐릭터.png');
+    playerImage.onload = () => console.log('이미지 로드 성공');
 
     // 게임 상태
     let gameState = 'start'; // start, playing, end
