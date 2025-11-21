@@ -175,10 +175,10 @@
     const laneHeight = (laneBottom - laneTop) / 4;
     
     const lanes = [
-      { y: laneTop + laneHeight * 0.5, direction: 1 }, // 하단1: 왼→오
-      { y: laneTop + laneHeight * 1.5, direction: 1 }, // 하단2: 왼→오
-      { y: laneTop + laneHeight * 2.5, direction: -1 }, // 상단1: 오→왼
-      { y: laneTop + laneHeight * 3.5, direction: -1 }  // 상단2: 오→왼
+      { y: laneTop + laneHeight * 0.5, direction: -1 }, // 하단1: 오→왼
+      { y: laneTop + laneHeight * 1.5, direction: -1 }, // 하단2: 오→왼
+      { y: laneTop + laneHeight * 2.5, direction: 1 }, // 상단1: 왼→오
+      { y: laneTop + laneHeight * 3.5, direction: 1 }  // 상단2: 왼→오
     ];
 
     // 차량 배열
@@ -318,15 +318,28 @@
       player.velocityY = 0;
     }
 
-    // 초기 코인 생성 (오른쪽 아래)
+    // 초기 코인 생성 (오른쪽 아래, 가운데, 왼쪽 위)
     function spawnInitialCoins() {
-      for (let i = 0; i < 3; i++) {
-        coins.push({
-          x: canvas.width - 80 + Math.random() * 40,
-          y: canvas.height - 200 + i * 30,
-          collected: false
-        });
-      }
+      // 오른쪽 아래
+      coins.push({
+        x: canvas.width - 80,
+        y: canvas.height - 250,
+        collected: false
+      });
+      
+      // 가운데
+      coins.push({
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        collected: false
+      });
+      
+      // 왼쪽 위
+      coins.push({
+        x: 80,
+        y: 250,
+        collected: false
+      });
     }
 
     // 차량 생성
@@ -535,12 +548,16 @@
       const dashSize = 15;
       const dashGap = 15;
       
+      // 1차선 상단 외곽선
+      for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+        ctx.fillRect(x, laneTop - 1, dashSize, 2);
+      }
+      
+      // 차선 구분선
       for (let i = 0; i < 4; i++) {
         const lineY = laneTop + laneHeight * (i + 1);
-        if (i < 3) { // 마지막 라인은 그리지 않음
-          for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
-            ctx.fillRect(x, lineY - 1, dashSize, 2);
-          }
+        for (let x = 0; x < canvas.width; x += dashSize + dashGap) {
+          ctx.fillRect(x, lineY - 1, dashSize, 2);
         }
       }
       
