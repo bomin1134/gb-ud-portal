@@ -86,13 +86,12 @@
     
     <div id="info-panel">
         <h2>🦽 휠체어 시뮬레이터</h2>
-        <p><span class="key">W/S</span> 왼팔 밀기/당기기</p>
-        <p><span class="key">↑/↓</span> 오른팔 밀기/당기기</p>
-        <p><span class="key">A/D</span> 왼팔 좌우</p>
-        <p><span class="key">←/→</span> 오른팔 좌우</p>
-        <p><span class="key">Space</span> 양팔 동시 밀기</p>
+        <p><span class="key">W/S</span> 왼쪽 바퀴 전진/후진</p>
+        <p><span class="key">↑/↓</span> 오른쪽 바퀴 전진/후진</p>
+        <p><span class="key">Space</span> 양쪽 바퀴 전진</p>
         <p><span class="key">V</span> 시점 전환 (1인칭/쿼터뷰)</p>
         <p><span class="key">R</span> 리셋</p>
+        <p style="margin-top:10px; font-size:12px; color:#95a5a6;">💡 좌우 바퀴를 다르게 조작하면 회전합니다</p>
     </div>
 
     <div id="stats">
@@ -343,27 +342,24 @@
                 this.body = new CANNON.Body({ 
                     mass: 20,
                     linearDamping: 0.3,
-                    angularDamping: 0.5,
+                    angularDamping: 0.7,
                     material: wheelMaterial
                 });
                 this.body.addShape(bodyShape);
-                this.body.position.set(0, 1, 0);
+                this.body.position.set(0, 0.6, 12); // 시작 볼라드 뒤쪽
                 
-                // 관성 텐서 설정 (회전 관성)
+                // Y축 회전만 허용 (바닥에 고정)
+                this.body.fixedRotation = false;
                 this.body.updateMassProperties();
-                // 휠체어의 형태에 맞는 관성 모멘트 설정
-                this.body.inertia.set(5, 8, 5); // x, y, z 축 회전 관성
-                this.body.invInertia.set(
-                    1 / this.body.inertia.x,
-                    1 / this.body.inertia.y,
-                    1 / this.body.inertia.z
-                );
                 
                 world.addBody(this.body);
                 
-                // 최대 속도 제한
-                this.maxSpeed = 10;
-                this.maxAngularSpeed = 2;
+                // 바퀴 제어 변수
+                this.leftWheelSpeed = 0;
+                this.rightWheelSpeed = 0;
+                this.wheelAcceleration = 0.3;
+                this.wheelFriction = 0.9;
+                this.maxWheelSpeed = 5;
 
                 this.wheelRotation = 0;
                 
@@ -371,59 +367,53 @@
             }
 
             update() {
-                // 물리 바디와 시각적 모델 동기화
+                // Y 위치 고정 (바닥에 붙이기)
+                this.body.position.y = 0.6;
+                this.body.velocity.y = 0;
+                
+                // X, Z 회전 방지 (바닥에 평행 유지)
+                const euler = new CANNON.Vec3();
+                this.body.quaternion.toEuler(euler);
+                const yRotation = euler.y;
+                this.body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yRotation);
+                this.body.angularVelocity.x = 0;
+                this.body.angularVelocity.z = 0;
+                
+                // 시각적 모델 동기화
                 this.group.position.copy(this.body.position);
                 this.group.quaternion.copy(this.body.quaternion);
 
-                // 속도 제한 (관성 효과)
-                const velocity = this.body.velocity;
-                const speed = velocity.length();
-                if (speed > this.maxSpeed) {
-                    velocity.scale(this.maxSpeed / speed, velocity);
-                }
-                
-                // 각속도 제한 (회전 관성 효과)
-                const angularVelocity = this.body.angularVelocity;
-                const angularSpeed = angularVelocity.length();
-                if (angularSpeed > this.maxAngularSpeed) {
-                    angularVelocity.scale(this.maxAngularSpeed / angularSpeed, angularVelocity);
-                }
-
-                // 바퀴 회전 애니메이션
-                this.wheelRotation += speed * 0.05;
-                this.leftWheel.rotation.x = this.wheelRotation;
-                this.rightWheel.rotation.x = this.wheelRotation;
-                this.leftRim.rotation.x = this.wheelRotation;
-                this.rightRim.rotation.x = this.wheelRotation;
+                // 바퀴 회전 애니메이션 (각 바퀴 독립적으로)
+                this.leftWheel.rotation.x += this.leftWheelSpeed * 0.1;
+                this.leftRim.rotation.x += this.leftWheelSpeed * 0.1;
+                this.rightWheel.rotation.x += this.rightWheelSpeed * 0.1;
+                this.rightRim.rotation.x += this.rightWheelSpeed * 0.1;
             }
 
-            applyForce(side, force, angle) {
-                // 휠체어의 현재 방향 기준으로 힘 적용
-                const direction = new CANNON.Vec3();
-                const localForce = new CANNON.Vec3(
-                    Math.sin(angle) * force,
-                    0,
-                    Math.cos(angle) * force
-                );
+            applyWheelForce(leftSpeed, rightSpeed) {
+                // 바퀴 속도 설정
+                this.leftWheelSpeed = leftSpeed;
+                this.rightWheelSpeed = rightSpeed;
                 
-                this.body.quaternion.vmult(localForce, direction);
+                // 평균 속도로 전진/후진
+                const avgSpeed = (leftSpeed + rightSpeed) / 2;
+                const speedDiff = rightSpeed - leftSpeed;
                 
-                // 힘의 적용 위치 (왼쪽 또는 오른쪽)
-                const offset = new CANNON.Vec3(side === 'left' ? -0.6 : 0.6, 0, 0);
-                const worldOffset = new CANNON.Vec3();
-                this.body.quaternion.vmult(offset, worldOffset);
+                // 휠체어의 현재 방향으로 이동
+                const forward = new CANNON.Vec3(0, 0, -1);
+                const worldForward = new CANNON.Vec3();
+                this.body.quaternion.vmult(forward, worldForward);
                 
-                // 임펄스로 직접 적용 (더 즉각적인 반응)
-                this.body.applyImpulse(direction.scale(0.1), this.body.position.vadd(worldOffset));
+                // 속도 적용
+                this.body.velocity.x = worldForward.x * avgSpeed;
+                this.body.velocity.z = worldForward.z * avgSpeed;
                 
-                // 토크 적용 (회전 관성 효과) - 한쪽 팔만 밀면 회전
-                const torqueDirection = side === 'left' ? 1 : -1;
-                const torque = new CANNON.Vec3(0, torqueDirection * force * 0.01, 0);
-                this.body.torque.vadd(torque, this.body.torque);
+                // 회전 (바퀴 속도 차이로)
+                this.body.angularVelocity.y = speedDiff * 0.3;
             }
 
             reset() {
-                this.body.position.set(0, 1, 0);
+                this.body.position.set(0, 0.6, 12); // 시작 볼라드 뒤쪽
                 this.body.velocity.set(0, 0, 0);
                 this.body.angularVelocity.set(0, 0, 0);
                 this.body.quaternion.set(0, 0, 0, 1);
@@ -797,62 +787,53 @@
             // 물리 시뮬레이션 업데이트
             world.step(1 / 60, deltaTime, 3);
 
-            // 입력 처리
+            // 입력 처리 - 바퀴 제어
+            let leftWheelSpeed = 0;
+            let rightWheelSpeed = 0;
             let leftForce = 0;
             let rightForce = 0;
             let leftAngle = 0;
             let rightAngle = 0;
-            let leftSideAngle = 0;
-            let rightSideAngle = 0;
 
-            // 왼팔 제어
+            // 왼쪽 바퀴 제어 (WASD)
             if (gameState.keys['w']) {
+                leftWheelSpeed += wheelchair.maxWheelSpeed;
                 leftForce = 1;
                 leftAngle = -0.8;
-                wheelchair.applyForce('left', 50, 0);
             }
             if (gameState.keys['s']) {
+                leftWheelSpeed -= wheelchair.maxWheelSpeed;
                 leftForce = 0.5;
                 leftAngle = 0.5;
-                wheelchair.applyForce('left', -30, 0);
-            }
-            if (gameState.keys['a']) {
-                leftSideAngle = -0.3;
-            }
-            if (gameState.keys['d']) {
-                leftSideAngle = 0.3;
             }
 
-            // 오른팔 제어
+            // 오른쪽 바퀴 제어 (방향키)
             if (gameState.keys['arrowup']) {
+                rightWheelSpeed += wheelchair.maxWheelSpeed;
                 rightForce = 1;
                 rightAngle = -0.8;
-                wheelchair.applyForce('right', 50, 0);
             }
             if (gameState.keys['arrowdown']) {
+                rightWheelSpeed -= wheelchair.maxWheelSpeed;
                 rightForce = 0.5;
                 rightAngle = 0.5;
-                wheelchair.applyForce('right', -30, 0);
-            }
-            if (gameState.keys['arrowleft']) {
-                rightSideAngle = 0.3;
-            }
-            if (gameState.keys['arrowright']) {
-                rightSideAngle = -0.3;
             }
 
-            // 스페이스바 - 양팔 동시 밀기
+            // 스페이스바 - 양쪽 바퀴 동시 전진
             if (gameState.keys[' ']) {
+                leftWheelSpeed = wheelchair.maxWheelSpeed;
+                rightWheelSpeed = wheelchair.maxWheelSpeed;
                 leftForce = rightForce = 1;
                 leftAngle = rightAngle = -0.8;
-                wheelchair.applyForce('left', 60, 0);
-                wheelchair.applyForce('right', 60, 0);
             }
+
+            // 바퀴 힘 적용
+            wheelchair.applyWheelForce(leftWheelSpeed, rightWheelSpeed);
 
             // 객체 업데이트
             wheelchair.update();
-            leftArm.update(wheelchair, leftForce, leftAngle, leftSideAngle);
-            rightArm.update(wheelchair, rightForce, rightAngle, rightSideAngle);
+            leftArm.update(wheelchair, leftForce, leftAngle, 0);
+            rightArm.update(wheelchair, rightForce, rightAngle, 0);
             character.update(wheelchair);
             updateCamera();
 
