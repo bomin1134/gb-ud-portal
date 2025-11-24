@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>휠체어 시뮬레이터 - 팔 조작 게임</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+            max-width: 300px;
+        }
+        #info-panel h2 {
+            margin-bottom: 10px;
+            color: #4ecdc4;
+        }
+        #info-panel p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .key {
+            display: inline-block;
+            background: #4ecdc4;
+            color: black;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin: 0 2px;
+        }
+        #stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+            min-width: 200px;
+        }
+        .stat-item {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .stat-label {
+            color: #4ecdc4;
+        }
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">로딩 중...</div>
+    <div id="canvas-container"></div>
+    
+    <div id="info-panel">
+        <h2>🦽 휠체어 시뮬레이터</h2>
+        <p><span class="key">W/S</span> 왼팔 밀기/당기기</p>
+        <p><span class="key">↑/↓</span> 오른팔 밀기/당기기</p>
+        <p><span class="key">A/D</span> 왼팔 좌우</p>
+        <p><span class="key">←/→</span> 오른팔 좌우</p>
+        <p><span class="key">Space</span> 양팔 동시 밀기</p>
+        <p><span class="key">V</span> 시점 전환 (1인칭/쿼터뷰)</p>
+        <p><span class="key">R</span> 리셋</p>
+    </div>
+
+    <div id="stats">
+        <div class="stat-item">
+            <span class="stat-label">속도:</span>
+            <span id="speed">0.0 m/s</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">거리:</span>
+            <span id="distance">0.0 m</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">왼팔 힘:</span>
+            <span id="left-force">0%</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">오른팔 힘:</span>
+            <span id="right-force">0%</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">시점:</span>
+            <span id="view-mode">쿼터뷰</span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.min.js"></script>
+    <script>
+        // 게임 상태
+        const gameState = {
+            viewMode: 'quarter', // 'quarter', 'first-person', 'third-person'
+            leftArmForce: 0,
+            rightArmForce: 0,
+            leftArmAngle: 0,
+            rightArmAngle: 0,
+            speed: 0,
+            distance: 0,
+            keys: {}
+        };
+
+        // Three.js 설정
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Cannon.js 물리 세계
+        const world = new CANNON.World();
+        world.gravity.set(0, -9.82, 0);
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+
+        // 조명
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -50;
+        directionalLight.shadow.camera.right = 50;
+        directionalLight.shadow.camera.top = 50;
+        directionalLight.shadow.camera.bottom = -50;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        scene.add(directionalLight);
+
+        // 바닥 생성
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x90ee90,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const groundShape = new CANNON.Plane();
+        const groundBody = new CANNON.Body({ mass: 0 });
+        groundBody.addShape(groundShape);
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        world.addBody(groundBody);
+
+        // 그리드 헬퍼
+        const gridHelper = new THREE.GridHelper(200, 40, 0x444444, 0x888888);
+        scene.add(gridHelper);
+
+        // 휠체어 객체
+        class Wheelchair {
+            constructor() {
+                this.group = new THREE.Group();
+                
+                // 좌석
+                const seatGeometry = new THREE.BoxGeometry(1.2, 0.1, 1.2);
+                const seatMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                this.seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                this.seat.position.y = 0.8;
+                this.seat.castShadow = true;
+                this.group.add(this.seat);
+
+                // 등받이
+                const backrestGeometry = new THREE.BoxGeometry(1.2, 1, 0.1);
+                const backrestMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+                this.backrest = new THREE.Mesh(backrestGeometry, backrestMaterial);
+                this.backrest.position.set(0, 1.3, -0.55);
+                this.backrest.castShadow = true;
+                this.group.add(this.backrest);
+
+                // 바퀴 (큰 뒷바퀴)
+                const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 32);
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+                
+                this.leftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                this.leftWheel.rotation.z = Math.PI / 2;
+                this.leftWheel.position.set(-0.65, 0.4, 0);
+                this.leftWheel.castShadow = true;
+                this.group.add(this.leftWheel);
+
+                this.rightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                this.rightWheel.rotation.z = Math.PI / 2;
+                this.rightWheel.position.set(0.65, 0.4, 0);
+                this.rightWheel.castShadow = true;
+                this.group.add(this.rightWheel);
+
+                // 작은 앞바퀴
+                const smallWheelGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 32);
+                
+                this.frontLeftWheel = new THREE.Mesh(smallWheelGeometry, wheelMaterial);
+                this.frontLeftWheel.rotation.z = Math.PI / 2;
+                this.frontLeftWheel.position.set(-0.4, 0.15, 0.8);
+                this.frontLeftWheel.castShadow = true;
+                this.group.add(this.frontLeftWheel);
+
+                this.frontRightWheel = new THREE.Mesh(smallWheelGeometry, wheelMaterial);
+                this.frontRightWheel.rotation.z = Math.PI / 2;
+                this.frontRightWheel.position.set(0.4, 0.15, 0.8);
+                this.frontRightWheel.castShadow = true;
+                this.group.add(this.frontRightWheel);
+
+                // 핸드림 (바퀴 옆의 밀기용 림)
+                const rimGeometry = new THREE.TorusGeometry(0.45, 0.02, 16, 32);
+                const rimMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                
+                this.leftRim = new THREE.Mesh(rimGeometry, rimMaterial);
+                this.leftRim.rotation.y = Math.PI / 2;
+                this.leftRim.position.set(-0.7, 0.4, 0);
+                this.group.add(this.leftRim);
+
+                this.rightRim = new THREE.Mesh(rimGeometry, rimMaterial);
+                this.rightRim.rotation.y = Math.PI / 2;
+                this.rightRim.position.set(0.7, 0.4, 0);
+                this.group.add(this.rightRim);
+
+                // 물리 바디
+                const bodyShape = new CANNON.Box(new CANNON.Vec3(0.6, 0.5, 0.6));
+                this.body = new CANNON.Body({ 
+                    mass: 20,
+                    linearDamping: 0.5,
+                    angularDamping: 0.8
+                });
+                this.body.addShape(bodyShape);
+                this.body.position.set(0, 1, 0);
+                world.addBody(this.body);
+
+                this.wheelRotation = 0;
+                
+                scene.add(this.group);
+            }
+
+            update() {
+                // 물리 바디와 시각적 모델 동기화
+                this.group.position.copy(this.body.position);
+                this.group.quaternion.copy(this.body.quaternion);
+
+                // 바퀴 회전 애니메이션
+                const speed = this.body.velocity.length();
+                this.wheelRotation += speed * 0.05;
+                this.leftWheel.rotation.x = this.wheelRotation;
+                this.rightWheel.rotation.x = this.wheelRotation;
+                this.leftRim.rotation.x = this.wheelRotation;
+                this.rightRim.rotation.x = this.wheelRotation;
+            }
+
+            applyForce(side, force, angle) {
+                // 휠체어의 현재 방향 기준으로 힘 적용
+                const direction = new CANNON.Vec3();
+                const localForce = new CANNON.Vec3(
+                    Math.sin(angle) * force,
+                    0,
+                    Math.cos(angle) * force
+                );
+                
+                this.body.quaternion.vmult(localForce, direction);
+                
+                // 힘의 적용 위치 (왼쪽 또는 오른쪽)
+                const offset = new CANNON.Vec3(side === 'left' ? -0.6 : 0.6, 0, 0);
+                const worldOffset = new CANNON.Vec3();
+                this.body.quaternion.vmult(offset, worldOffset);
+                
+                this.body.applyForce(direction, this.body.position.vadd(worldOffset));
+            }
+
+            reset() {
+                this.body.position.set(0, 1, 0);
+                this.body.velocity.set(0, 0, 0);
+                this.body.angularVelocity.set(0, 0, 0);
+                this.body.quaternion.set(0, 0, 0, 1);
+                gameState.distance = 0;
+            }
+        }
+
+        // 팔 모델
+        class Arm {
+            constructor(side) {
+                this.side = side;
+                this.group = new THREE.Group();
+                
+                // 상완 (어깨에서 팔꿈치)
+                const upperArmGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 16);
+                const armMaterial = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+                this.upperArm = new THREE.Mesh(upperArmGeometry, armMaterial);
+                this.upperArm.castShadow = true;
+                this.group.add(this.upperArm);
+
+                // 하완 (팔꿈치에서 손)
+                const lowerArmGeometry = new THREE.CylinderGeometry(0.07, 0.06, 0.5, 16);
+                this.lowerArm = new THREE.Mesh(lowerArmGeometry, armMaterial);
+                this.lowerArm.position.y = -0.5;
+                this.lowerArm.castShadow = true;
+                this.group.add(this.lowerArm);
+
+                // 손
+                const handGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+                this.hand = new THREE.Mesh(handGeometry, armMaterial);
+                this.hand.position.y = -0.75;
+                this.hand.castShadow = true;
+                this.group.add(this.hand);
+
+                this.angle = 0;
+                this.extension = 0; // 0 = 휴식, 1 = 완전 확장
+                this.sideAngle = 0; // 좌우 각도
+                
+                scene.add(this.group);
+            }
+
+            update(wheelchair, force, angle, sideAngle) {
+                // 어깨 위치 (휠체어 좌석 기준)
+                const shoulderX = this.side === 'left' ? -0.4 : 0.4;
+                const shoulderY = wheelchair.group.position.y + 0.5;
+                const shoulderZ = wheelchair.group.position.z - 0.3;
+
+                // 휠체어 회전 고려
+                const rotatedPos = new THREE.Vector3(shoulderX, 0, shoulderZ);
+                rotatedPos.applyQuaternion(wheelchair.group.quaternion);
+                
+                this.group.position.set(
+                    wheelchair.group.position.x + rotatedPos.x,
+                    shoulderY,
+                    wheelchair.group.position.z + rotatedPos.z
+                );
+
+                // 팔의 회전 (휠체어 방향 + 팔 각도)
+                const wheelchairRotation = new THREE.Euler().setFromQuaternion(wheelchair.group.quaternion);
+                this.group.rotation.y = wheelchairRotation.y + sideAngle;
+                
+                // 팔의 앞뒤 각도 (밀기/당기기)
+                this.angle = THREE.MathUtils.lerp(this.angle, angle, 0.15);
+                this.group.rotation.x = this.angle;
+
+                // 팔꿈치 굽힘
+                this.extension = THREE.MathUtils.lerp(this.extension, force, 0.15);
+                const elbowBend = (1 - this.extension) * 0.5;
+                this.lowerArm.rotation.x = elbowBend;
+            }
+        }
+
+        // 캐릭터 머리/몸통
+        class Character {
+            constructor() {
+                this.group = new THREE.Group();
+                
+                // 몸통
+                const torsoGeometry = new THREE.CylinderGeometry(0.3, 0.35, 0.8, 16);
+                const torsoMaterial = new THREE.MeshStandardMaterial({ color: 0x3498db });
+                this.torso = new THREE.Mesh(torsoGeometry, torsoMaterial);
+                this.torso.position.y = 0.4;
+                this.torso.castShadow = true;
+                this.group.add(this.torso);
+
+                // 머리
+                const headGeometry = new THREE.SphereGeometry(0.25, 16, 16);
+                const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+                this.head = new THREE.Mesh(headGeometry, headMaterial);
+                this.head.position.y = 1.05;
+                this.head.castShadow = true;
+                this.group.add(this.head);
+
+                scene.add(this.group);
+            }
+
+            update(wheelchair) {
+                this.group.position.copy(wheelchair.group.position);
+                this.group.position.y += 0.4;
+                this.group.quaternion.copy(wheelchair.group.quaternion);
+            }
+        }
+
+        // 장애물 생성
+        function createObstacles() {
+            const obstacles = [];
+            
+            // 몇 개의 콘 장애물
+            for (let i = 0; i < 8; i++) {
+                const coneGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
+                const coneMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xff6b35,
+                    roughness: 0.7
+                });
+                const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+                
+                const x = (Math.random() - 0.5) * 40;
+                const z = -10 - Math.random() * 60;
+                
+                cone.position.set(x, 0.4, z);
+                cone.castShadow = true;
+                scene.add(cone);
+                obstacles.push(cone);
+            }
+
+            return obstacles;
+        }
+
+        // 게임 객체 생성
+        const wheelchair = new Wheelchair();
+        const leftArm = new Arm('left');
+        const rightArm = new Arm('right');
+        const character = new Character();
+        const obstacles = createObstacles();
+
+        // 카메라 설정
+        function updateCamera() {
+            const pos = wheelchair.group.position;
+            const rot = wheelchair.group.rotation;
+
+            switch(gameState.viewMode) {
+                case 'quarter':
+                    camera.position.set(pos.x + 8, pos.y + 10, pos.z + 8);
+                    camera.lookAt(pos.x, pos.y, pos.z);
+                    break;
+                case 'first-person':
+                    const fpOffset = new THREE.Vector3(0, 1.2, 0.3);
+                    fpOffset.applyQuaternion(wheelchair.group.quaternion);
+                    camera.position.set(
+                        pos.x + fpOffset.x,
+                        pos.y + fpOffset.y,
+                        pos.z + fpOffset.z
+                    );
+                    const lookTarget = new THREE.Vector3(0, 1, -5);
+                    lookTarget.applyQuaternion(wheelchair.group.quaternion);
+                    camera.lookAt(
+                        pos.x + lookTarget.x,
+                        pos.y + lookTarget.y,
+                        pos.z + lookTarget.z
+                    );
+                    break;
+                case 'third-person':
+                    const tpOffset = new THREE.Vector3(0, 2, 5);
+                    tpOffset.applyQuaternion(wheelchair.group.quaternion);
+                    camera.position.set(
+                        pos.x + tpOffset.x,
+                        pos.y + tpOffset.y,
+                        pos.z + tpOffset.z
+                    );
+                    camera.lookAt(pos.x, pos.y + 1, pos.z);
+                    break;
+            }
+        }
+
+        // 입력 처리
+        document.addEventListener('keydown', (e) => {
+            gameState.keys[e.key.toLowerCase()] = true;
+            
+            if (e.key.toLowerCase() === 'v') {
+                const modes = ['quarter', 'first-person', 'third-person'];
+                const currentIndex = modes.indexOf(gameState.viewMode);
+                gameState.viewMode = modes[(currentIndex + 1) % modes.length];
+                
+                const modeNames = {
+                    'quarter': '쿼터뷰',
+                    'first-person': '1인칭',
+                    'third-person': '3인칭'
+                };
+                document.getElementById('view-mode').textContent = modeNames[gameState.viewMode];
+            }
+            
+            if (e.key.toLowerCase() === 'r') {
+                wheelchair.reset();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            gameState.keys[e.key.toLowerCase()] = false;
+        });
+
+        // 애니메이션 루프
+        let lastTime = Date.now();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            // 물리 시뮬레이션 업데이트
+            world.step(1 / 60, deltaTime, 3);
+
+            // 입력 처리
+            let leftForce = 0;
+            let rightForce = 0;
+            let leftAngle = 0;
+            let rightAngle = 0;
+            let leftSideAngle = 0;
+            let rightSideAngle = 0;
+
+            // 왼팔 제어
+            if (gameState.keys['w']) {
+                leftForce = 1;
+                leftAngle = -0.8;
+                wheelchair.applyForce('left', 50, 0);
+            }
+            if (gameState.keys['s']) {
+                leftForce = 0.5;
+                leftAngle = 0.5;
+                wheelchair.applyForce('left', -30, 0);
+            }
+            if (gameState.keys['a']) {
+                leftSideAngle = -0.3;
+            }
+            if (gameState.keys['d']) {
+                leftSideAngle = 0.3;
+            }
+
+            // 오른팔 제어
+            if (gameState.keys['arrowup']) {
+                rightForce = 1;
+                rightAngle = -0.8;
+                wheelchair.applyForce('right', 50, 0);
+            }
+            if (gameState.keys['arrowdown']) {
+                rightForce = 0.5;
+                rightAngle = 0.5;
+                wheelchair.applyForce('right', -30, 0);
+            }
+            if (gameState.keys['arrowleft']) {
+                rightSideAngle = 0.3;
+            }
+            if (gameState.keys['arrowright']) {
+                rightSideAngle = -0.3;
+            }
+
+            // 스페이스바 - 양팔 동시 밀기
+            if (gameState.keys[' ']) {
+                leftForce = rightForce = 1;
+                leftAngle = rightAngle = -0.8;
+                wheelchair.applyForce('left', 60, 0);
+                wheelchair.applyForce('right', 60, 0);
+            }
+
+            // 객체 업데이트
+            wheelchair.update();
+            leftArm.update(wheelchair, leftForce, leftAngle, leftSideAngle);
+            rightArm.update(wheelchair, rightForce, rightAngle, rightSideAngle);
+            character.update(wheelchair);
+            updateCamera();
+
+            // 통계 업데이트
+            gameState.speed = wheelchair.body.velocity.length();
+            gameState.distance += gameState.speed * deltaTime;
+            gameState.leftArmForce = leftForce * 100;
+            gameState.rightArmForce = rightForce * 100;
+
+            document.getElementById('speed').textContent = gameState.speed.toFixed(1) + ' m/s';
+            document.getElementById('distance').textContent = gameState.distance.toFixed(1) + ' m';
+            document.getElementById('left-force').textContent = Math.round(gameState.leftArmForce) + '%';
+            document.getElementById('right-force').textContent = Math.round(gameState.rightArmForce) + '%';
+
+            renderer.render(scene, camera);
+        }
+
+        // 윈도우 리사이즈 처리
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 로딩 완료
+        document.getElementById('loading').style.display = 'none';
+        
+        // 애니메이션 시작
+        animate();
+    </script>
+</body>
+</html>
