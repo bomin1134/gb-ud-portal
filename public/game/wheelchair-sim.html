@@ -121,6 +121,23 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.min.js"></script>
     <script>
+        // 라이브러리 로드 확인
+        window.addEventListener('load', function() {
+            if (typeof THREE === 'undefined') {
+                console.error('Three.js failed to load');
+                document.getElementById('loading').textContent = 'Three.js 로딩 실패';
+                return;
+            }
+            if (typeof CANNON === 'undefined') {
+                console.error('Cannon.js failed to load');
+                document.getElementById('loading').textContent = 'Cannon.js 로딩 실패';
+                return;
+            }
+            console.log('All libraries loaded successfully');
+            initGame();
+        });
+
+        function initGame() {
         // 게임 상태
         const gameState = {
             viewMode: 'quarter', // 'quarter', 'first-person', 'third-person'
@@ -609,6 +626,7 @@
         
         // 애니메이션 시작
         animate();
+        }
     </script>
 </body>
 </html>
