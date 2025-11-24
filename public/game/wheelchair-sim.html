@@ -97,12 +97,16 @@
 
     <div id="stats">
         <div class="stat-item">
-            <span class="stat-label">속도:</span>
-            <span id="speed">0.0 m/s</span>
+            <span class="stat-label">🪙 코인:</span>
+            <span id="coins">0 / 3</span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">거리:</span>
-            <span id="distance">0.0 m</span>
+            <span class="stat-label">⏱️ 시간:</span>
+            <span id="time">60초</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">속도:</span>
+            <span id="speed">0.0 m/s</span>
         </div>
         <div class="stat-item">
             <span class="stat-label">왼팔 힘:</span>
@@ -147,7 +151,11 @@
             rightArmAngle: 0,
             speed: 0,
             distance: 0,
-            keys: {}
+            keys: {},
+            playing: false,
+            coins: 0,
+            timeLeft: 60,
+            won: false
         };
 
         // Three.js 설정
@@ -174,6 +182,21 @@
         world.broadphase = new CANNON.NaiveBroadphase();
         world.solver.iterations = 10;
 
+        // 재질 정의 (마찰력 설정)
+        const physicsGroundMaterial = new CANNON.Material('groundMaterial');
+        const wheelMaterial = new CANNON.Material('wheelMaterial');
+        const wheelGroundContact = new CANNON.ContactMaterial(
+            wheelMaterial,
+            physicsGroundMaterial,
+            {
+                friction: 0.8,
+                restitution: 0.1,
+                contactEquationStiffness: 1e8,
+                contactEquationRelaxation: 3
+            }
+        );
+        world.addContactMaterial(wheelGroundContact);
+
         // 조명
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
@@ -189,20 +212,58 @@
         directionalLight.shadow.mapSize.height = 2048;
         scene.add(directionalLight);
 
-        // 바닥 생성
-        const groundGeometry = new THREE.PlaneGeometry(200, 200);
-        const groundMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x90ee90,
-            roughness: 0.8,
-            metalness: 0.2
+        // 도로 생성 (어두운 회색)
+        const roadGeometry = new THREE.PlaneGeometry(200, 200);
+        const roadMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x4a4a4a,
+            roughness: 0.9,
+            metalness: 0.1
         });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
+        const road = new THREE.Mesh(roadGeometry, roadMaterial);
+        road.rotation.x = -Math.PI / 2;
+        road.receiveShadow = true;
+        scene.add(road);
+
+        // 횡단보도 (흰색 줄무늬)
+        const crosswalkStripes = [];
+        const stripeWidth = 1.5;
+        const stripeLength = 15;
+        const startZ = 0;
+        for (let i = 0; i < 10; i++) {
+            const stripeGeometry = new THREE.PlaneGeometry(stripeWidth, stripeLength);
+            const stripeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff,
+                roughness: 0.8
+            });
+            const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+            stripe.rotation.x = -Math.PI / 2;
+            stripe.position.set(-7 + i * 1.6, 0.01, startZ);
+            stripe.receiveShadow = true;
+            scene.add(stripe);
+            crosswalkStripes.push(stripe);
+        }
+
+        // 차선 (노란색)
+        const laneGeometry = new THREE.PlaneGeometry(0.2, 100);
+        const laneMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xf1c40f,
+            roughness: 0.8
+        });
+        const leftLane = new THREE.Mesh(laneGeometry, laneMaterial);
+        leftLane.rotation.x = -Math.PI / 2;
+        leftLane.position.set(-10, 0.01, 0);
+        scene.add(leftLane);
+
+        const rightLane = new THREE.Mesh(laneGeometry, laneMaterial);
+        rightLane.rotation.x = -Math.PI / 2;
+        rightLane.position.set(10, 0.01, 0);
+        scene.add(rightLane);
 
         const groundShape = new CANNON.Plane();
-        const groundBody = new CANNON.Body({ mass: 0 });
+        const groundBody = new CANNON.Body({ 
+            mass: 0,
+            material: physicsGroundMaterial
+        });
         groundBody.addShape(groundShape);
         groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
         world.addBody(groundBody);
@@ -281,12 +342,28 @@
                 const bodyShape = new CANNON.Box(new CANNON.Vec3(0.6, 0.5, 0.6));
                 this.body = new CANNON.Body({ 
                     mass: 20,
-                    linearDamping: 0.5,
-                    angularDamping: 0.8
+                    linearDamping: 0.3,
+                    angularDamping: 0.5,
+                    material: wheelMaterial
                 });
                 this.body.addShape(bodyShape);
                 this.body.position.set(0, 1, 0);
+                
+                // 관성 텐서 설정 (회전 관성)
+                this.body.updateMassProperties();
+                // 휠체어의 형태에 맞는 관성 모멘트 설정
+                this.body.inertia.set(5, 8, 5); // x, y, z 축 회전 관성
+                this.body.invInertia.set(
+                    1 / this.body.inertia.x,
+                    1 / this.body.inertia.y,
+                    1 / this.body.inertia.z
+                );
+                
                 world.addBody(this.body);
+                
+                // 최대 속도 제한
+                this.maxSpeed = 10;
+                this.maxAngularSpeed = 2;
 
                 this.wheelRotation = 0;
                 
@@ -298,8 +375,21 @@
                 this.group.position.copy(this.body.position);
                 this.group.quaternion.copy(this.body.quaternion);
 
+                // 속도 제한 (관성 효과)
+                const velocity = this.body.velocity;
+                const speed = velocity.length();
+                if (speed > this.maxSpeed) {
+                    velocity.scale(this.maxSpeed / speed, velocity);
+                }
+                
+                // 각속도 제한 (회전 관성 효과)
+                const angularVelocity = this.body.angularVelocity;
+                const angularSpeed = angularVelocity.length();
+                if (angularSpeed > this.maxAngularSpeed) {
+                    angularVelocity.scale(this.maxAngularSpeed / angularSpeed, angularVelocity);
+                }
+
                 // 바퀴 회전 애니메이션
-                const speed = this.body.velocity.length();
                 this.wheelRotation += speed * 0.05;
                 this.leftWheel.rotation.x = this.wheelRotation;
                 this.rightWheel.rotation.x = this.wheelRotation;
@@ -323,7 +413,13 @@
                 const worldOffset = new CANNON.Vec3();
                 this.body.quaternion.vmult(offset, worldOffset);
                 
-                this.body.applyForce(direction, this.body.position.vadd(worldOffset));
+                // 임펄스로 직접 적용 (더 즉각적인 반응)
+                this.body.applyImpulse(direction.scale(0.1), this.body.position.vadd(worldOffset));
+                
+                // 토크 적용 (회전 관성 효과) - 한쪽 팔만 밀면 회전
+                const torqueDirection = side === 'left' ? 1 : -1;
+                const torque = new CANNON.Vec3(0, torqueDirection * force * 0.01, 0);
+                this.body.torque.vadd(torque, this.body.torque);
             }
 
             reset() {
@@ -431,29 +527,152 @@
             }
         }
 
-        // 장애물 생성
-        function createObstacles() {
-            const obstacles = [];
-            
-            // 몇 개의 콘 장애물
-            for (let i = 0; i < 8; i++) {
-                const coneGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
-                const coneMaterial = new THREE.MeshStandardMaterial({ 
-                    color: 0xff6b35,
-                    roughness: 0.7
+        // 볼라드 생성 (시작점과 끝점)
+        function createBollards() {
+            const bollards = [];
+            const bollardGeometry = new THREE.CylinderGeometry(0.15, 0.2, 0.8, 16);
+            const bollardMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x2c3e50,
+                roughness: 0.7
+            });
+
+            // 시작점 볼라드 (앞쪽)
+            for (let i = 0; i < 9; i++) {
+                const bollard = new THREE.Mesh(bollardGeometry, bollardMaterial);
+                const bollardBody = new CANNON.Body({
+                    mass: 0,
+                    shape: new CANNON.Cylinder(0.15, 0.2, 0.8, 16)
                 });
-                const cone = new THREE.Mesh(coneGeometry, coneMaterial);
                 
-                const x = (Math.random() - 0.5) * 40;
-                const z = -10 - Math.random() * 60;
+                const x = -8 + i * 2;
+                const z = 10;
                 
-                cone.position.set(x, 0.4, z);
-                cone.castShadow = true;
-                scene.add(cone);
-                obstacles.push(cone);
+                bollard.position.set(x, 0.4, z);
+                bollardBody.position.set(x, 0.4, z);
+                bollard.castShadow = true;
+                
+                scene.add(bollard);
+                world.addBody(bollardBody);
+                bollards.push({ mesh: bollard, body: bollardBody });
             }
 
-            return obstacles;
+            // 끝점 볼라드 (뒤쪽 - 결승선)
+            for (let i = 0; i < 9; i++) {
+                const bollard = new THREE.Mesh(bollardGeometry, bollardMaterial);
+                const bollardBody = new CANNON.Body({
+                    mass: 0,
+                    shape: new CANNON.Cylinder(0.15, 0.2, 0.8, 16)
+                });
+                
+                const x = -8 + i * 2;
+                const z = -30;
+                
+                bollard.position.set(x, 0.4, z);
+                bollardBody.position.set(x, 0.4, z);
+                bollard.castShadow = true;
+                
+                scene.add(bollard);
+                world.addBody(bollardBody);
+                bollards.push({ mesh: bollard, body: bollardBody });
+            }
+
+            return bollards;
+        }
+
+        // 차량 생성
+        function createCars() {
+            const cars = [];
+            return cars;
+        }
+
+        function spawnCar(cars) {
+            if (Math.random() < 0.02) { // 2% 확률로 생성
+                const carGeometry = new THREE.BoxGeometry(2, 1, 4);
+                const carMaterial = new THREE.MeshStandardMaterial({ 
+                    color: Math.random() > 0.5 ? 0xe67e22 : 0x3498db,
+                    roughness: 0.5,
+                    metalness: 0.3
+                });
+                const car = new THREE.Mesh(carGeometry, carMaterial);
+                
+                const direction = Math.random() > 0.5 ? 1 : -1;
+                const lane = Math.random() > 0.5 ? -5 : 5;
+                const z = Math.random() * -20 - 5;
+                
+                car.position.set(direction === 1 ? -20 : 20, 0.5, z);
+                car.castShadow = true;
+                scene.add(car);
+                
+                const carBody = new CANNON.Body({
+                    mass: 100,
+                    shape: new CANNON.Box(new CANNON.Vec3(1, 0.5, 2))
+                });
+                carBody.position.copy(car.position);
+                carBody.velocity.set(direction * 5, 0, 0);
+                world.addBody(carBody);
+                
+                cars.push({ mesh: car, body: carBody, direction });
+            }
+        }
+
+        // 코인 생성
+        function createCoins() {
+            const coins = [];
+            const coinGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 32);
+            const coinMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xf1c40f,
+                roughness: 0.3,
+                metalness: 0.8
+            });
+
+            const positions = [
+                { x: -6, z: -5 },
+                { x: 0, z: -15 },
+                { x: 6, z: -25 }
+            ];
+
+            positions.forEach(pos => {
+                const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+                coin.position.set(pos.x, 0.5, pos.z);
+                coin.rotation.x = Math.PI / 2;
+                coin.castShadow = true;
+                coin.collected = false;
+                scene.add(coin);
+                coins.push(coin);
+            });
+
+            return coins;
+        }
+
+        // 결승선
+        function createFinishLine() {
+            const finishGeometry = new THREE.PlaneGeometry(20, 2);
+            const finishMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff,
+                roughness: 0.8
+            });
+            const finish = new THREE.Mesh(finishGeometry, finishMaterial);
+            finish.rotation.x = -Math.PI / 2;
+            finish.position.set(0, 0.02, -32);
+            scene.add(finish);
+            
+            // 체커보드 패턴
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const size = 32;
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    ctx.fillStyle = (i + j) % 2 === 0 ? '#ffffff' : '#000000';
+                    ctx.fillRect(i * size, j * size, size, size);
+                }
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            finish.material.map = texture;
+            finish.material.needsUpdate = true;
+            
+            return finish;
         }
 
         // 게임 객체 생성
@@ -461,7 +680,44 @@
         const leftArm = new Arm('left');
         const rightArm = new Arm('right');
         const character = new Character();
-        const obstacles = createObstacles();
+        const bollards = createBollards();
+        const cars = createCars();
+        const coins = createCoins();
+        const finishLine = createFinishLine();
+        
+        // 타이머 시작
+        let gameTimer = null;
+        function startGameTimer() {
+            gameState.playing = true;
+            gameState.timeLeft = 60;
+            if (gameTimer) clearInterval(gameTimer);
+            gameTimer = setInterval(() => {
+                if (gameState.playing) {
+                    gameState.timeLeft--;
+                    document.getElementById('time').textContent = gameState.timeLeft + '초';
+                    if (gameState.timeLeft <= 0) {
+                        endGame(false, '시간 초과!');
+                    }
+                }
+            }, 1000);
+        }
+        
+        function endGame(won, message) {
+            gameState.playing = false;
+            if (gameTimer) clearInterval(gameTimer);
+            alert(message);
+            if (won) {
+                wheelchair.reset();
+                coins.forEach(coin => coin.collected = false);
+                gameState.coins = 0;
+                startGameTimer();
+            }
+        }
+        
+        // 게임 시작
+        setTimeout(() => {
+            startGameTimer();
+        }, 100);
 
         // 카메라 설정
         function updateCamera() {
@@ -600,14 +856,55 @@
             character.update(wheelchair);
             updateCamera();
 
+            // 차량 업데이트
+            if (gameState.playing) {
+                spawnCar(cars);
+                for (let i = cars.length - 1; i >= 0; i--) {
+                    cars[i].mesh.position.copy(cars[i].body.position);
+                    if (Math.abs(cars[i].mesh.position.x) > 25) {
+                        scene.remove(cars[i].mesh);
+                        world.removeBody(cars[i].body);
+                        cars.splice(i, 1);
+                    } else {
+                        // 차량과 충돌 체크
+                        const dx = wheelchair.body.position.x - cars[i].body.position.x;
+                        const dy = wheelchair.body.position.y - cars[i].body.position.y;
+                        const dz = wheelchair.body.position.z - cars[i].body.position.z;
+                        const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                        if (distance < 2) {
+                            endGame(false, '차량에 부딪혔습니다!');
+                        }
+                    }
+                }
+            }
+
+            // 코인 수집
+            coins.forEach((coin, index) => {
+                if (!coin.collected) {
+                    coin.rotation.y += 0.05;
+                    const dx = wheelchair.body.position.x - coin.position.x;
+                    const dz = wheelchair.body.position.z - coin.position.z;
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    if (distance < 1.5) {
+                        coin.collected = true;
+                        coin.visible = false;
+                        gameState.coins++;
+                        document.getElementById('coins').textContent = gameState.coins + ' / 3';
+                    }
+                }
+            });
+
+            // 결승선 체크
+            if (wheelchair.body.position.z < -30 && gameState.playing) {
+                endGame(true, `축하합니다! 코인 ${gameState.coins}개를 모으고 결승선에 도착했습니다!`);
+            }
+
             // 통계 업데이트
             gameState.speed = wheelchair.body.velocity.length();
-            gameState.distance += gameState.speed * deltaTime;
             gameState.leftArmForce = leftForce * 100;
             gameState.rightArmForce = rightForce * 100;
 
             document.getElementById('speed').textContent = gameState.speed.toFixed(1) + ' m/s';
-            document.getElementById('distance').textContent = gameState.distance.toFixed(1) + ' m';
             document.getElementById('left-force').textContent = Math.round(gameState.leftArmForce) + '%';
             document.getElementById('right-force').textContent = Math.round(gameState.rightArmForce) + '%';
 
