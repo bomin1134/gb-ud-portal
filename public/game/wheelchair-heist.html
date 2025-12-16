@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>휠체어 도둑 대탈주 - Wheelchair Heist</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            color: white;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        canvas {
+            display: block;
+            cursor: grab;
+        }
+        
+        canvas:active {
+            cursor: grabbing;
+        }
+        
+        /* UI 패널 */
+        #game-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            border: 3px solid #00ff88;
+            min-width: 300px;
+            box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+        
+        #game-ui h2 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            font-size: 24px;
+            text-shadow: 0 0 10px #00ff88;
+        }
+        
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        
+        .stat-label {
+            color: #aaa;
+        }
+        
+        .stat-value {
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .thief-stat {
+            color: #ff4444;
+        }
+        
+        .cop-stat {
+            color: #4444ff;
+        }
+        
+        /* 세대 정보 */
+        #generation-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            border: 3px solid #ff88ff;
+            min-width: 280px;
+            box-shadow: 0 0 30px rgba(255, 136, 255, 0.5);
+        }
+        
+        #generation-info h3 {
+            color: #ff88ff;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+        
+        .generation-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .win-rate {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .strategy {
+            color: #ffdd44;
+            font-style: italic;
+            margin-top: 5px;
+        }
+        
+        /* 거리 게이지 */
+        #distance-gauge {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            border-radius: 25px;
+            border: 3px solid #ffff00;
+            box-shadow: 0 0 20px rgba(255, 255, 0, 0.5);
+        }
+        
+        #distance-bar {
+            width: 400px;
+            height: 30px;
+            background: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #distance-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #ffff00, #ff0000);
+            transition: width 0.3s;
+        }
+        
+        #distance-text {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        /* 컨트롤 패널 */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+        }
+        
+        .control-btn {
+            background: rgba(0, 0, 0, 0.8);
+            border: 3px solid #00ff88;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .control-btn:hover {
+            background: #00ff88;
+            color: black;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #00ff88;
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* 이벤트 로그 */
+        #event-log {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            width: 250px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #888;
+        }
+        
+        .event-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-size: 14px;
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .event-thief {
+            background: rgba(255, 68, 68, 0.3);
+            border-left: 4px solid #ff4444;
+        }
+        
+        .event-cop {
+            background: rgba(68, 68, 255, 0.3);
+            border-left: 4px solid #4444ff;
+        }
+        
+        .event-system {
+            background: rgba(255, 255, 255, 0.2);
+            border-left: 4px solid #888;
+        }
+        
+        /* 모바일 메뉴 */
+        #mobile-menu {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: none;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 10px;
+            padding: 10px;
+            z-index: 1000;
+        }
+        
+        #menu-toggle {
+            display: none;
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #00ff88;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 999;
+        }
+        
+        @media (max-width: 768px) {
+            #game-ui, #generation-info, #event-log {
+                display: none;
+            }
+            
+            #menu-toggle {
+                display: block;
+            }
+            
+            #mobile-menu.active {
+                display: block;
+            }
+            
+            #distance-gauge {
+                bottom: 120px;
+            }
+            
+            #distance-bar {
+                width: 250px;
+            }
+            
+            #controls {
+                flex-direction: column;
+                bottom: 10px;
+            }
+            
+            .control-btn {
+                padding: 12px 24px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <!-- 메뉴 토글 (모바일) -->
+    <button id="menu-toggle">☰  메뉴</button>
+    
+    <!-- 모바일 메뉴 -->
+    <div id="mobile-menu">
+        <h3>📊 게임 정보</h3>
+        <div id="mobile-stats"></div>
+    </div>
+    
+    <!-- 게임 UI -->
+    <div id="game-ui">
+        <h2>🚨 휠체어 도둑 대탈주</h2>
+        <div class="stat-row">
+            <span class="stat-label">현재 라운드</span>
+            <span class="stat-value" id="round-number">1</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">경과 시간</span>
+            <span class="stat-value" id="elapsed-time">0.0s</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label thief-stat">🦽 도둑 수</span>
+            <span class="stat-value thief-stat" id="thief-count">3</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label cop-stat">🚔 경찰 수</span>
+            <span class="stat-value cop-stat" id="cop-count">3</span>
+        </div>
+        <div class="stat-row">
+            <span class="stat-label">맵 난이도</span>
+            <span class="stat-value" id="map-difficulty">기본</span>
+        </div>
+    </div>
+    
+    <!-- 세대 정보 -->
+    <div id="generation-info">
+        <div class="generation-box">
+            <h3>🦽 도둑 AI</h3>
+            <div class="stat-row">
+                <span>세대</span>
+                <span id="thief-generation">1세대</span>
+            </div>
+            <div class="win-rate thief-stat" id="thief-winrate">0%</div>
+            <div class="strategy" id="thief-strategy">학습 중...</div>
+        </div>
+        
+        <div class="generation-box">
+            <h3>🚔 경찰 AI</h3>
+            <div class="stat-row">
+                <span>세대</span>
+                <span id="cop-generation">1세대</span>
+            </div>
+            <div class="win-rate cop-stat" id="cop-winrate">0%</div>
+            <div class="strategy" id="cop-strategy">학습 중...</div>
+        </div>
+    </div>
+    
+    <!-- 거리 게이지 -->
+    <div id="distance-gauge">
+        <div id="distance-bar">
+            <div id="distance-fill" style="width: 50%"></div>
+        </div>
+        <div id="distance-text">거리: -- m</div>
+    </div>
+    
+    <!-- 이벤트 로그 -->
+    <div id="event-log">
+        <h4 style="margin-bottom: 10px; color: #ffdd44;">📋 이벤트</h4>
+        <div id="log-items"></div>
+    </div>
+    
+    <!-- 컨트롤 -->
+    <div id="controls">
+        <button class="control-btn" id="btn-start">▶️ 시작</button>
+        <button class="control-btn" id="btn-pause">⏸️ 일시정지</button>
+        <button class="control-btn" id="btn-reset">🔄 리셋</button>
+        <button class="control-btn" id="btn-speed">⚡ 속도: 1x</button>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon@0.6.2/build/cannon.min.js"></script>
+    
+    <script>
+        // 게임 초기화를 래핑하는 함수
+        function initGame() {
+            // Three.js와 Cannon.js 로드 확인
+            if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
+                console.error('Three.js 또는 Cannon.js가 로드되지 않았습니다.');
+                setTimeout(initGame, 100);
+                return;
+            }
+
+            console.log('🎮 휠체어 도둑 대탈주 초기화 중...');
+
+            // ===== 게임 상태 =====
+            const gameState = {
+                playing: false,
+                paused: false,
+                speed: 1,
+                round: 1,
+                startTime: 0,
+                elapsedTime: 0,
+                
+                thiefGeneration: 1,
+                copGeneration: 1,
+                
+                thiefWins: 0,
+                copWins: 0,
+                totalRounds: 0,
+                
+                thiefStrategies: [
+                    '직선 도주',
+                    '경사로 찾기',
+                    '턱 회피',
+                    '거리 유지',
+                    '지그재그',
+                    '미끼 작전',
+                    '협력 탈출'
+                ],
+                copStrategies: [
+                    '직선 추격',
+                    '예측 이동',
+                    '스태미나 관리',
+                    '포위 작전',
+                    '패턴 분석',
+                    '함정 설치',
+                    '팀워크'
+                ]
+            };
+
+            // ===== Three.js 설정 =====
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, 50, 200);
+
+            const camera = new THREE.PerspectiveCamera(
+                60,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.set(0, 40, 50);
+            camera.lookAt(0, 0, 0);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // ===== 조명 =====
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(20, 50, 20);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -50;
+            directionalLight.shadow.camera.right = 50;
+            directionalLight.shadow.camera.top = 50;
+            directionalLight.shadow.camera.bottom = -50;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // ===== Cannon.js 물리 엔진 =====
+            const world = new CANNON.World();
+            world.gravity.set(0, -20, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            // 재질 설정
+            const groundMaterial = new CANNON.Material('ground');
+            const entityMaterial = new CANNON.Material('entity');
+            
+            const contactMaterial = new CANNON.ContactMaterial(
+                groundMaterial,
+                entityMaterial,
+                {
+                    friction: 0.4,
+                    restitution: 0.1
+                }
+            );
+            world.addContactMaterial(contactMaterial);
+
+            // ===== 바닥 =====
+            const groundGeometry = new THREE.PlaneGeometry(100, 200);
+            const groundMaterialThree = new THREE.MeshStandardMaterial({ 
+                color: 0x555555,
+                roughness: 0.8
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterialThree);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const groundShape = new CANNON.Plane();
+            const groundBody = new CANNON.Body({ 
+                mass: 0,
+                material: groundMaterial
+            });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            world.addBody(groundBody);
+
+            // ===== 공유 재질 (텍스처 유닛 절약) =====
+            const sharedMaterials = {
+                thief: new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.7 }),
+                cop: new THREE.MeshStandardMaterial({ color: 0x4444ff, roughness: 0.7 }),
+                obstacle: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8 }),
+                ramp: new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.9 }),
+                goal: new THREE.MeshStandardMaterial({ 
+                    color: 0x00ff00, 
+                    emissive: 0x00ff00, 
+                    emissiveIntensity: 0.3 
+                })
+            };
+
+            // ===== 휠체어 도둑 클래스 =====
+            class WheelchairThief {
+                constructor(x, z, ai) {
+                    this.ai = ai;
+                    this.escaped = false;
+                    this.caught = false;
+                    this.speed = 0;
+                    this.maxSpeed = 8;  // 최고속도 높음
+                    this.acceleration = 0.3;
+                    this.turnSpeed = 0.08;
+                    this.targetAngle = 0;
+                    
+                    // 휠체어 바디
+                    const geometry = new THREE.BoxGeometry(0.8, 0.6, 1.2);
+                    this.mesh = new THREE.Mesh(geometry, sharedMaterials.thief);
+                    this.mesh.position.set(x, 0.3, z);
+                    this.mesh.castShadow = true;
+                    scene.add(this.mesh);
+                    
+                    // 물리 바디
+                    const shape = new CANNON.Box(new CANNON.Vec3(0.4, 0.3, 0.6));
+                    this.body = new CANNON.Body({
+                        mass: 15,
+                        material: entityMaterial,
+                        linearDamping: 0.3,
+                        angularDamping: 0.8
+                    });
+                    this.body.addShape(shape);
+                    this.body.position.set(x, 0.3, z);
+                    this.body.fixedRotation = true;
+                    this.body.updateMassProperties();
+                    world.addBody(this.body);
+                    
+                    // 바퀴 표시
+                    const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
+                    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+                    
+                    this.wheels = [];
+                    const wheelPositions = [
+                        [-0.3, -0.2, 0.4],
+                        [0.3, -0.2, 0.4],
+                        [-0.3, -0.2, -0.4],
+                        [0.3, -0.2, -0.4]
+                    ];
+                    
+                    wheelPositions.forEach(pos => {
+                        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                        wheel.rotation.z = Math.PI / 2;
+                        wheel.position.set(pos[0], pos[1], pos[2]);
+                        this.mesh.add(wheel);
+                        this.wheels.push(wheel);
+                    });
+                }
+                
+                update(obstacles, goal, nearestCop) {
+                    if (this.escaped || this.caught) return;
+                    
+                    // AI 의사결정
+                    const decision = this.ai.decide(this.body.position, obstacles, goal, nearestCop);
+                    this.targetAngle = decision.targetAngle;
+                    const desiredSpeed = decision.speed;
+                    
+                    // 속도 조절
+                    if (this.speed < desiredSpeed) {
+                        this.speed += this.acceleration;
+                    } else if (this.speed > desiredSpeed) {
+                        this.speed -= this.acceleration * 0.5;
+                    }
+                    this.speed = Math.max(0, Math.min(this.maxSpeed, this.speed));
+                    
+                    // 회전
+                    const currentAngle = Math.atan2(
+                        this.body.velocity.z,
+                        this.body.velocity.x
+                    );
+                    
+                    let angleDiff = this.targetAngle - currentAngle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    
+                    const turnAmount = angleDiff * this.turnSpeed;
+                    
+                    // 이동
+                    const moveX = Math.cos(currentAngle + turnAmount) * this.speed;
+                    const moveZ = Math.sin(currentAngle + turnAmount) * this.speed;
+                    
+                    this.body.velocity.x = moveX;
+                    this.body.velocity.z = moveZ;
+                    this.body.velocity.y = Math.max(this.body.velocity.y, -10);
+                    
+                    // 메시 업데이트
+                    this.mesh.position.copy(this.body.position);
+                    this.mesh.quaternion.copy(this.body.quaternion);
+                    
+                    // 바퀴 회전
+                    this.wheels.forEach(wheel => {
+                        wheel.rotation.x += this.speed * 0.1;
+                    });
+                    
+                    // 탈출 체크
+                    if (this.body.position.z < goal.z + 2) {
+                        this.escaped = true;
+                        addLog('🦽 도둑이 탈출했습니다!', 'thief');
+                    }
+                }
+                
+                remove() {
+                    scene.remove(this.mesh);
+                    world.removeBody(this.body);
+                }
+            }
+
+            // ===== 경찰 클래스 =====
+            class Cop {
+                constructor(x, z, ai) {
+                    this.ai = ai;
+                    this.speed = 0;
+                    this.maxSpeed = 5;  // 평균속도 높음
+                    this.acceleration = 0.2;
+                    this.turnSpeed = 0.12;
+                    this.targetAngle = 0;
+                    
+                    // 경찰 모델
+                    const bodyGeom = new THREE.CylinderGeometry(0.3, 0.3, 1.5, 8);
+                    this.mesh = new THREE.Mesh(bodyGeom, sharedMaterials.cop);
+                    this.mesh.position.set(x, 0.75, z);
+                    this.mesh.castShadow = true;
+                    scene.add(this.mesh);
+                    
+                    // 물리 바디
+                    const shape = new CANNON.Cylinder(0.3, 0.3, 1.5, 8);
+                    this.body = new CANNON.Body({
+                        mass: 10,
+                        material: entityMaterial,
+                        linearDamping: 0.4,
+                        angularDamping: 0.9
+                    });
+                    this.body.addShape(shape);
+                    this.body.position.set(x, 0.75, z);
+                    this.body.fixedRotation = true;
+                    world.addBody(this.body);
+                }
+                
+                update(thieves, obstacles) {
+                    // 가장 가까운 도둑 찾기
+                    let nearestThief = null;
+                    let minDist = Infinity;
+                    
+                    thieves.forEach(thief => {
+                        if (thief.escaped || thief.caught) return;
+                        
+                        const dx = thief.body.position.x - this.body.position.x;
+                        const dz = thief.body.position.z - this.body.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearestThief = thief;
+                        }
+                    });
+                    
+                    if (!nearestThief) return;
+                    
+                    // AI 의사결정
+                    const decision = this.ai.decide(
+                        this.body.position,
+                        nearestThief.body.position,
+                        obstacles,
+                        minDist
+                    );
+                    
+                    this.targetAngle = decision.targetAngle;
+                    const desiredSpeed = decision.speed;
+                    
+                    // 장애물 앞에서 속도 유지 (경찰은 턱을 쉽게 넘음)
+                    const speedMultiplier = decision.nearObstacle ? 0.95 : 1.0;
+                    
+                    // 속도 조절
+                    if (this.speed < desiredSpeed * speedMultiplier) {
+                        this.speed += this.acceleration;
+                    } else {
+                        this.speed -= this.acceleration * 0.3;
+                    }
+                    this.speed = Math.max(0, Math.min(this.maxSpeed, this.speed));
+                    
+                    // 회전
+                    const currentAngle = Math.atan2(
+                        this.body.velocity.z,
+                        this.body.velocity.x
+                    );
+                    
+                    let angleDiff = this.targetAngle - currentAngle;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    
+                    const turnAmount = angleDiff * this.turnSpeed;
+                    
+                    // 이동
+                    const moveX = Math.cos(currentAngle + turnAmount) * this.speed;
+                    const moveZ = Math.sin(currentAngle + turnAmount) * this.speed;
+                    
+                    this.body.velocity.x = moveX;
+                    this.body.velocity.z = moveZ;
+                    this.body.velocity.y = Math.max(this.body.velocity.y, -10);
+                    
+                    // 메시 업데이트
+                    this.mesh.position.copy(this.body.position);
+                    this.mesh.quaternion.copy(this.body.quaternion);
+                    
+                    // 체포 체크
+                    if (minDist < 1.5 && !nearestThief.caught && !nearestThief.escaped) {
+                        nearestThief.caught = true;
+                        addLog('🚔 경찰이 도둑을 체포했습니다!', 'cop');
+                    }
+                }
+                
+                remove() {
+                    scene.remove(this.mesh);
+                    world.removeBody(this.body);
+                }
+            }
+
+            // ===== AI 컨트롤러 =====
+            class ThiefAI {
+                constructor(generation) {
+                    this.generation = generation;
+                    this.strategy = gameState.thiefStrategies[
+                        Math.min(generation - 1, gameState.thiefStrategies.length - 1)
+                    ];
+                }
+                
+                decide(position, obstacles, goal, nearestCop) {
+                    const goalAngle = Math.atan2(
+                        goal.z - position.z,
+                        goal.x - position.x
+                    );
+                    
+                    // 가까운 장애물 찾기
+                    let nearestObstacle = null;
+                    let minObstacleDist = Infinity;
+                    
+                    obstacles.forEach(obs => {
+                        const dx = obs.position.x - position.x;
+                        const dz = obs.position.z - position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < minObstacleDist && dist < 5) {
+                            minObstacleDist = dist;
+                            nearestObstacle = obs;
+                        }
+                    });
+                    
+                    let targetAngle = goalAngle;
+                    let speed = this.generation >= 3 ? 7 : 5;
+                    
+                    // 세대별 전략
+                    if (nearestObstacle && minObstacleDist < 3) {
+                        // 턱 회피 (2세대 이상)
+                        if (this.generation >= 2) {
+                            const avoidAngle = Math.atan2(
+                                nearestObstacle.position.z - position.z,
+                                nearestObstacle.position.x - position.x
+                            );
+                            targetAngle = avoidAngle + Math.PI / 2;
+                            speed = 4;  // 장애물 앞에서 느려짐
+                        } else {
+                            speed = 2;  // 1세대는 매우 느려짐
+                        }
+                    }
+                    
+                    // 경찰과의 거리 고려 (3세대 이상)
+                    if (nearestCop && this.generation >= 3) {
+                        const copDx = nearestCop.position.x - position.x;
+                        const copDz = nearestCop.position.z - position.z;
+                        const copDist = Math.sqrt(copDx * copDx + copDz * copDz);
+                        
+                        if (copDist < 5) {
+                            const copAngle = Math.atan2(copDz, copDx);
+                            // 경찰 반대 방향으로 살짝 회피
+                            targetAngle = goalAngle - (copAngle - goalAngle) * 0.3;
+                        }
+                    }
+                    
+                    return { targetAngle, speed };
+                }
+            }
+
+            class CopAI {
+                constructor(generation) {
+                    this.generation = generation;
+                    this.strategy = gameState.copStrategies[
+                        Math.min(generation - 1, gameState.copStrategies.length - 1)
+                    ];
+                }
+                
+                decide(position, targetPos, obstacles, distance) {
+                    const directAngle = Math.atan2(
+                        targetPos.z - position.z,
+                        targetPos.x - position.x
+                    );
+                    
+                    let targetAngle = directAngle;
+                    let speed = 5;
+                    let nearObstacle = false;
+                    
+                    // 가까운 장애물 체크
+                    obstacles.forEach(obs => {
+                        const dx = obs.position.x - position.x;
+                        const dz = obs.position.z - position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < 2) {
+                            nearObstacle = true;
+                        }
+                    });
+                    
+                    // 세대별 전략
+                    if (this.generation >= 2 && distance > 10) {
+                        // 멀리 있을 때는 스태미나 아끼기
+                        speed = 4;
+                    } else if (this.generation >= 3 && distance < 8) {
+                        // 가까우면 스퍼트
+                        speed = 5.5;
+                    }
+                    
+                    // 예측 이동 (4세대 이상)
+                    if (this.generation >= 4 && distance < 15) {
+                        // 도둑의 이동 방향 예측
+                        targetAngle = directAngle + (Math.random() - 0.5) * 0.3;
+                    }
+                    
+                    return { targetAngle, speed, nearObstacle };
+                }
+            }
+
+            // ===== 장애물 생성 =====
+            function createObstacles() {
+                const obstacles = [];
+                
+                // 턱 (계단 같은 높이)
+                for (let i = 0; i < 5; i++) {
+                    const z = -10 - i * 15;
+                    const curb = createCurb(-3, z);
+                    obstacles.push(curb);
+                }
+                
+                // 볼라드
+                for (let i = 0; i < 8; i++) {
+                    const z = -5 - i * 12;
+                    const x = (Math.random() - 0.5) * 8;
+                    const bollard = createBollard(x, z);
+                    obstacles.push(bollard);
+                }
+                
+                // 경사로 (도움)
+                for (let i = 0; i < 3; i++) {
+                    const z = -15 - i * 20;
+                    createRamp(5, z);
+                }
+                
+                return obstacles;
+            }
+
+            function createCurb(x, z) {
+                const geometry = new THREE.BoxGeometry(8, 0.3, 1);
+                const mesh = new THREE.Mesh(geometry, sharedMaterials.obstacle);
+                mesh.position.set(x, 0.15, z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                
+                const shape = new CANNON.Box(new CANNON.Vec3(4, 0.15, 0.5));
+                const body = new CANNON.Body({ mass: 0 });
+                body.addShape(shape);
+                body.position.set(x, 0.15, z);
+                world.addBody(body);
+                
+                return { mesh, body, position: { x, z } };
+            }
+
+            function createBollard(x, z) {
+                const geometry = new THREE.CylinderGeometry(0.15, 0.2, 0.8, 8);
+                const mesh = new THREE.Mesh(geometry, sharedMaterials.obstacle);
+                mesh.position.set(x, 0.4, z);
+                mesh.castShadow = true;
+                scene.add(mesh);
+                
+                const shape = new CANNON.Cylinder(0.15, 0.2, 0.8, 8);
+                const body = new CANNON.Body({ mass: 0 });
+                body.addShape(shape);
+                body.position.set(x, 0.4, z);
+                world.addBody(body);
+                
+                return { mesh, body, position: { x, z } };
+            }
+
+            function createRamp(x, z) {
+                const geometry = new THREE.BoxGeometry(3, 0.1, 5);
+                const mesh = new THREE.Mesh(geometry, sharedMaterials.ramp);
+                mesh.position.set(x, 0.05, z);
+                mesh.rotation.x = -Math.PI / 12;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+            }
+
+            // ===== 목표 지점 =====
+            function createGoal() {
+                const geometry = new THREE.PlaneGeometry(20, 3);
+                const mesh = new THREE.Mesh(geometry, sharedMaterials.goal);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.set(0, 0.02, -95);
+                scene.add(mesh);
+                
+                return { mesh, z: -95, x: 0 };
+            }
+
+            // ===== 게임 객체 =====
+            let thieves = [];
+            let cops = [];
+            let obstacles = [];
+            let goal = null;
+
+            function initRound() {
+                // 기존 객체 제거
+                thieves.forEach(t => t.remove());
+                cops.forEach(c => c.remove());
+                thieves = [];
+                cops = [];
+                
+                // 도둑 생성 (3명)
+                for (let i = 0; i < 3; i++) {
+                    const thief = new WheelchairThief(
+                        (i - 1) * 3,
+                        5,
+                        new ThiefAI(gameState.thiefGeneration)
+                    );
+                    thieves.push(thief);
+                }
+                
+                // 경찰 생성 (3명)
+                for (let i = 0; i < 3; i++) {
+                    const cop = new Cop(
+                        (i - 1) * 3,
+                        15,
+                        new CopAI(gameState.copGeneration)
+                    );
+                    cops.push(cop);
+                }
+                
+                gameState.startTime = Date.now();
+                updateUI();
+                addLog('🎮 새로운 라운드 시작!', 'system');
+            }
+
+            // 초기 맵 생성
+            obstacles = createObstacles();
+            goal = createGoal();
+
+            // ===== UI 업데이트 =====
+            function updateUI() {
+                document.getElementById('round-number').textContent = gameState.round;
+                document.getElementById('thief-count').textContent = thieves.filter(t => !t.caught && !t.escaped).length;
+                document.getElementById('cop-count').textContent = cops.length;
+                
+                document.getElementById('thief-generation').textContent = `${gameState.thiefGeneration}세대`;
+                document.getElementById('cop-generation').textContent = `${gameState.copGeneration}세대`;
+                
+                const thiefWinRate = gameState.totalRounds > 0 
+                    ? (gameState.thiefWins / gameState.totalRounds * 100).toFixed(0)
+                    : 0;
+                const copWinRate = gameState.totalRounds > 0
+                    ? (gameState.copWins / gameState.totalRounds * 100).toFixed(0)
+                    : 0;
+                
+                document.getElementById('thief-winrate').textContent = `${thiefWinRate}%`;
+                document.getElementById('cop-winrate').textContent = `${copWinRate}%`;
+                
+                const thiefStrategyIndex = Math.min(gameState.thiefGeneration - 1, gameState.thiefStrategies.length - 1);
+                const copStrategyIndex = Math.min(gameState.copGeneration - 1, gameState.copStrategies.length - 1);
+                
+                document.getElementById('thief-strategy').textContent = `전략: ${gameState.thiefStrategies[thiefStrategyIndex]}`;
+                document.getElementById('cop-strategy').textContent = `전략: ${gameState.copStrategies[copStrategyIndex]}`;
+            }
+
+            function updateDistanceGauge() {
+                if (thieves.length === 0 || cops.length === 0) return;
+                
+                // 가장 가까운 도둑-경찰 거리
+                let minDist = Infinity;
+                thieves.forEach(thief => {
+                    if (thief.caught || thief.escaped) return;
+                    cops.forEach(cop => {
+                        const dx = thief.body.position.x - cop.body.position.x;
+                        const dz = thief.body.position.z - cop.body.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        minDist = Math.min(minDist, dist);
+                    });
+                });
+                
+                const maxDist = 30;
+                const percentage = Math.max(0, Math.min(100, (minDist / maxDist) * 100));
+                
+                document.getElementById('distance-fill').style.width = percentage + '%';
+                document.getElementById('distance-text').textContent = `거리: ${minDist.toFixed(1)}m`;
+                
+                if (minDist < 3) {
+                    document.getElementById('distance-text').style.color = '#ff0000';
+                } else if (minDist < 8) {
+                    document.getElementById('distance-text').style.color = '#ffff00';
+                } else {
+                    document.getElementById('distance-text').style.color = '#00ff00';
+                }
+            }
+
+            function addLog(message, type) {
+                const logItems = document.getElementById('log-items');
+                const item = document.createElement('div');
+                item.className = `event-item event-${type}`;
+                item.textContent = message;
+                logItems.insertBefore(item, logItems.firstChild);
+                
+                // 최대 20개만 유지
+                while (logItems.children.length > 20) {
+                    logItems.removeChild(logItems.lastChild);
+                }
+            }
+
+            function checkRoundEnd() {
+                const escapedCount = thieves.filter(t => t.escaped).length;
+                const caughtCount = thieves.filter(t => t.caught).length;
+                
+                if (escapedCount + caughtCount >= thieves.length) {
+                    gameState.totalRounds++;
+                    
+                    if (escapedCount > caughtCount) {
+                        gameState.thiefWins++;
+                        addLog(`🏆 도둑 팀 승리! (${escapedCount}명 탈출)`, 'thief');
+                        
+                        // 도둑이 이기면 경찰 세대 증가
+                        if (gameState.totalRounds % 3 === 0) {
+                            gameState.copGeneration++;
+                            addLog(`🚔 경찰 AI 진화: ${gameState.copGeneration}세대`, 'cop');
+                        }
+                    } else {
+                        gameState.copWins++;
+                        addLog(`🏆 경찰 팀 승리! (${caughtCount}명 체포)`, 'cop');
+                        
+                        // 경찰이 이기면 도둑 세대 증가
+                        if (gameState.totalRounds % 3 === 0) {
+                            gameState.thiefGeneration++;
+                            addLog(`🦽 도둑 AI 진화: ${gameState.thiefGeneration}세대`, 'thief');
+                        }
+                    }
+                    
+                    gameState.round++;
+                    
+                    setTimeout(() => {
+                        initRound();
+                    }, 2000);
+                }
+            }
+
+            // ===== 애니메이션 루프 =====
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                if (gameState.playing && !gameState.paused) {
+                    const deltaTime = 1 / 60 * gameState.speed;
+                    world.step(deltaTime);
+                    
+                    // 경과 시간
+                    gameState.elapsedTime = (Date.now() - gameState.startTime) / 1000;
+                    const elapsedEl = document.getElementById('elapsed-time');
+                    if (elapsedEl) {
+                        elapsedEl.textContent = gameState.elapsedTime.toFixed(1) + 's';
+                    }
+                    
+                    // 도둑 업데이트
+                    thieves.forEach(thief => {
+                        const nearestCop = cops.reduce((nearest, cop) => {
+                            const dx = cop.body.position.x - thief.body.position.x;
+                            const dz = cop.body.position.z - thief.body.position.z;
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            
+                            if (!nearest || dist < nearest.dist) {
+                                return { cop, dist, position: cop.body.position };
+                            }
+                            return nearest;
+                        }, null);
+                        
+                        thief.update(obstacles, goal, nearestCop ? nearestCop.position : null);
+                    });
+                    
+                    // 경찰 업데이트
+                    cops.forEach(cop => {
+                        cop.update(thieves, obstacles);
+                    });
+                    
+                    updateDistanceGauge();
+                    checkRoundEnd();
+                }
+                
+                renderer.render(scene, camera);
+            }
+
+            // ===== 컨트롤 =====
+            document.getElementById('btn-start').addEventListener('click', () => {
+                if (!gameState.playing) {
+                    gameState.playing = true;
+                    gameState.paused = false;
+                    initRound();
+                    addLog('게임 시작!', 'system');
+                } else {
+                    gameState.paused = false;
+                }
+            });
+
+            document.getElementById('btn-pause').addEventListener('click', () => {
+                gameState.paused = !gameState.paused;
+                addLog(gameState.paused ? '일시정지' : '재개', 'system');
+            });
+
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                gameState.playing = false;
+                gameState.round = 1;
+                gameState.thiefGeneration = 1;
+                gameState.copGeneration = 1;
+                gameState.thiefWins = 0;
+                gameState.copWins = 0;
+                gameState.totalRounds = 0;
+                
+                thieves.forEach(t => t.remove());
+                cops.forEach(c => c.remove());
+                thieves = [];
+                cops = [];
+                
+                updateUI();
+                addLog('게임 리셋', 'system');
+            });
+
+            document.getElementById('btn-speed').addEventListener('click', () => {
+                const speeds = [1, 2, 4];
+                const currentIndex = speeds.indexOf(gameState.speed);
+                gameState.speed = speeds[(currentIndex + 1) % speeds.length];
+                document.getElementById('btn-speed').textContent = `⚡ 속도: ${gameState.speed}x`;
+                addLog(`재생 속도: ${gameState.speed}x`, 'system');
+            });
+
+            // 모바일 메뉴
+            document.getElementById('menu-toggle').addEventListener('click', () => {
+                const menu = document.getElementById('mobile-menu');
+                menu.classList.toggle('active');
+            });
+
+            // 창 크기 조절
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // 애니메이션 시작
+            animate();
+            updateUI();
+            
+            console.log('✅ 게임 초기화 완료!');
+        }
+
+        // 페이지 로드 시 게임 초기화
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initGame);
+        } else {
+            initGame();
+        }
+    </script>
+</body>
+</html>
