@@ -222,7 +222,7 @@
             <span class="stat-label">🪙 코인:</span>
             <span id="coins">0 / 3</span>
         </div>
-        <div class="stat-item">
+        <div class="stat-item" style="display: none;">
             <span class="stat-label">⏱️ 시간:</span>
             <span id="time">60초</span>
         </div>
@@ -338,12 +338,22 @@
             0.1,
             1000
         );
+        camera.position.set(8, 10, 20); // 초기 카메라 위치
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        const container = document.getElementById('canvas-container');
+        console.log('Canvas container:', container);
+        if (!container) {
+            console.error('canvas-container not found!');
+            document.getElementById('loading').textContent = 'Canvas container not found!';
+            return;
+        }
+        container.appendChild(renderer.domElement);
+        console.log('Renderer added to DOM');
 
         // Cannon.js 물리 세계
         const world = new CANNON.World();
@@ -1369,18 +1379,19 @@
         // 타이머 시작
         let gameTimer = null;
         function startGameTimer() {
+            // 타이머 비활성화
             gameState.playing = true;
-            gameState.timeLeft = 60;
-            if (gameTimer) clearInterval(gameTimer);
-            gameTimer = setInterval(() => {
-                if (gameState.playing) {
-                    gameState.timeLeft--;
-                    document.getElementById('time').textContent = gameState.timeLeft + '초';
-                    if (gameState.timeLeft <= 0) {
-                        endGame(false, '시간 초과!');
-                    }
-                }
-            }, 1000);
+            // gameState.timeLeft = 60;
+            // if (gameTimer) clearInterval(gameTimer);
+            // gameTimer = setInterval(() => {
+            //     if (gameState.playing) {
+            //         gameState.timeLeft--;
+            //         document.getElementById('time').textContent = gameState.timeLeft + '초';
+            //         if (gameState.timeLeft <= 0) {
+            //             endGame(false, '시간 초과!');
+            //         }
+            //     }
+            // }, 1000);
         }
         
         function endGame(won, message) {
@@ -1395,10 +1406,11 @@
             }
         }
         
-        // 게임 시작
-        setTimeout(() => {
-            startGameTimer();
-        }, 100);
+        // 게임 시작 (타이머 비활성화)
+        gameState.playing = true;
+        // setTimeout(() => {
+        //     startGameTimer();
+        // }, 100);
 
         // 카메라 설정
         function updateCamera() {
