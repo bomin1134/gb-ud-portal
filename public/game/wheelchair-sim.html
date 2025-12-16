@@ -1758,7 +1758,8 @@
                         coin.collected = true;
                         coin.visible = false;
                         gameState.coins++;
-                        document.getElementById('coins').textContent = gameState.coins + ' / 3';
+                        const coinsEl = document.getElementById('coins');
+                        if (coinsEl) coinsEl.textContent = gameState.coins + ' / 3';
                     }
                 }
             });
@@ -1773,9 +1774,10 @@
             gameState.leftArmForce = leftForce * 100;
             gameState.rightArmForce = rightForce * 100;
 
-            document.getElementById('speed').textContent = gameState.speed.toFixed(1) + ' m/s';
-            document.getElementById('left-force').textContent = Math.round(gameState.leftArmForce) + '%';
-            document.getElementById('right-force').textContent = Math.round(gameState.rightArmForce) + '%';
+            const speedEl = document.getElementById('speed');
+            if (speedEl) speedEl.textContent = gameState.speed.toFixed(1) + ' m/s';
+            // document.getElementById('left-force').textContent = Math.round(gameState.leftArmForce) + '%';
+            // document.getElementById('right-force').textContent = Math.round(gameState.rightArmForce) + '%';
 
             renderer.render(scene, camera);
         }
