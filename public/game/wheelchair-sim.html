@@ -858,31 +858,50 @@
                 this.pathPoints = [];
                 this.obstacleGenerationPoints = [];
                 
+                // 공유 재질 생성 (재사용으로 텍스처 유닛 한계 해결)
+                this.sharedMaterials = {
+                    building1: new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.8, metalness: 0.2 }),
+                    building2: new THREE.MeshStandardMaterial({ color: 0x9e9e9e, roughness: 0.8, metalness: 0.2 }),
+                    building3: new THREE.MeshStandardMaterial({ color: 0x607d8b, roughness: 0.8, metalness: 0.2 }),
+                    window: new THREE.MeshStandardMaterial({ color: 0x87ceeb, emissive: 0x87ceeb, emissiveIntensity: 0.3, transparent: true, opacity: 0.7 }),
+                    pole: new THREE.MeshStandardMaterial({ color: 0x333333 }),
+                    lamp1: new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffd700, emissiveIntensity: 0.8 }),
+                    lamp2: new THREE.MeshStandardMaterial({ color: 0xffa500, emissive: 0xffa500, emissiveIntensity: 0.8 }),
+                    trunk: new THREE.MeshStandardMaterial({ color: 0x8b4513 }),
+                    crown1: new THREE.MeshStandardMaterial({ color: 0x2d5016, roughness: 0.9 }),
+                    crown2: new THREE.MeshStandardMaterial({ color: 0x3a6b1c, roughness: 0.9 }),
+                    bench: new THREE.MeshStandardMaterial({ color: 0x8b4513 }),
+                    sign1: new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5 }),
+                    sign2: new THREE.MeshStandardMaterial({ color: 0x0066cc, roughness: 0.5 }),
+                    bush: new THREE.MeshStandardMaterial({ color: 0x4a7c59, roughness: 0.9 }),
+                    flower: new THREE.MeshStandardMaterial({ color: 0xff69b4, roughness: 0.9 })
+                };
+                
                 // 거리 요소 탬플릿
                 this.streetElements = {
                     buildings: [
-                        { type: 'residential', height: [8, 15], width: [6, 10], color: 0xcccccc },
-                        { type: 'commercial', height: [12, 20], width: [8, 15], color: 0x9e9e9e },
-                        { type: 'modern', height: [15, 25], width: [10, 18], color: 0x607d8b }
+                        { type: 'residential', height: [8, 15], width: [6, 10], material: 'building1' },
+                        { type: 'commercial', height: [12, 20], width: [8, 15], material: 'building2' },
+                        { type: 'modern', height: [15, 25], width: [10, 18], material: 'building3' }
                     ],
                     streetLights: [
-                        { height: 4, poleRadius: 0.08, lampSize: 0.3, color: 0xffd700 },
-                        { height: 5, poleRadius: 0.1, lampSize: 0.4, color: 0xffa500 }
+                        { height: 4, poleRadius: 0.08, lampSize: 0.3, lampMaterial: 'lamp1' },
+                        { height: 5, poleRadius: 0.1, lampSize: 0.4, lampMaterial: 'lamp2' }
                     ],
                     trees: [
-                        { trunkHeight: 2, trunkRadius: 0.2, crownRadius: 1.5, crownColor: 0x2d5016 },
-                        { trunkHeight: 3, trunkRadius: 0.3, crownRadius: 2, crownColor: 0x3a6b1c }
+                        { trunkHeight: 2, trunkRadius: 0.2, crownRadius: 1.5, crownMaterial: 'crown1' },
+                        { trunkHeight: 3, trunkRadius: 0.3, crownRadius: 2, crownMaterial: 'crown2' }
                     ],
                     benches: [
-                        { length: 1.5, height: 0.5, color: 0x8b4513 }
+                        { length: 1.5, height: 0.5 }
                     ],
                     signs: [
-                        { type: 'traffic', height: 2, size: 0.5, color: 0xff0000 },
-                        { type: 'info', height: 1.5, size: 0.4, color: 0x0066cc }
+                        { type: 'traffic', height: 2, size: 0.5, material: 'sign1' },
+                        { type: 'info', height: 1.5, size: 0.4, material: 'sign2' }
                     ],
                     vegetation: [
-                        { type: 'bush', radius: 0.5, height: 0.8, color: 0x4a7c59 },
-                        { type: 'flowerbed', width: 2, length: 1, height: 0.3, color: 0xff69b4 }
+                        { type: 'bush', radius: 0.5, height: 0.8, material: 'bush' },
+                        { type: 'flowerbed', width: 2, length: 1, height: 0.3, material: 'flower' }
                     ]
                 };
                 
@@ -1118,12 +1137,7 @@
                 const depth = 5 + Math.random() * 3;
                 
                 const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
-                const buildingMaterial = new THREE.MeshStandardMaterial({ 
-                    color: template.color,
-                    roughness: 0.8,
-                    metalness: 0.2
-                });
-                const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                const building = new THREE.Mesh(buildingGeometry, this.sharedMaterials[template.material]);
                 building.position.set(x, height / 2, z);
                 building.castShadow = true;
                 building.receiveShadow = true;
@@ -1132,14 +1146,7 @@
                 const windowCount = Math.floor(height / 2);
                 for (let i = 0; i < windowCount; i++) {
                     const windowGeometry = new THREE.BoxGeometry(width * 0.8, 0.8, 0.1);
-                    const windowMaterial = new THREE.MeshStandardMaterial({ 
-                        color: 0x87ceeb,
-                        emissive: 0x87ceeb,
-                        emissiveIntensity: 0.3,
-                        transparent: true,
-                        opacity: 0.7
-                    });
-                    const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                    const window = new THREE.Mesh(windowGeometry, this.sharedMaterials.window);
                     window.position.set(0, -height/2 + 2 + i * 2, depth/2 + 0.05);
                     building.add(window);
                 }
@@ -1169,25 +1176,21 @@
                 
                 // 기둥
                 const poleGeometry = new THREE.CylinderGeometry(template.poleRadius, template.poleRadius, template.height, 8);
-                const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-                const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+                const pole = new THREE.Mesh(poleGeometry, this.sharedMaterials.pole);
                 pole.position.y = template.height / 2;
                 pole.castShadow = true;
                 group.add(pole);
                 
                 // 램프
                 const lampGeometry = new THREE.SphereGeometry(template.lampSize, 16, 16);
-                const lampMaterial = new THREE.MeshStandardMaterial({ 
-                    color: template.color,
-                    emissive: template.color,
-                    emissiveIntensity: 0.8
-                });
+                const lampMaterial = this.sharedMaterials[template.lampMaterial];
                 const lamp = new THREE.Mesh(lampGeometry, lampMaterial);
                 lamp.position.y = template.height;
                 group.add(lamp);
                 
-                // 점광원
-                const light = new THREE.PointLight(template.color, 1, 10);
+                // 점광원 (색상은 램프 재질에서 가져옴)
+                const lightColor = template.lampMaterial === 'lamp1' ? 0xffd700 : 0xffa500;
+                const light = new THREE.PointLight(lightColor, 1, 10);
                 light.position.y = template.height;
                 light.castShadow = true;
                 group.add(light);
@@ -1222,18 +1225,14 @@
                 
                 // 나무 기둥
                 const trunkGeometry = new THREE.CylinderGeometry(template.trunkRadius, template.trunkRadius, template.trunkHeight, 8);
-                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
-                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                const trunk = new THREE.Mesh(trunkGeometry, this.sharedMaterials.trunk);
                 trunk.position.y = template.trunkHeight / 2;
                 trunk.castShadow = true;
                 group.add(trunk);
                 
                 // 나무 잎
                 const crownGeometry = new THREE.SphereGeometry(template.crownRadius, 8, 8);
-                const crownMaterial = new THREE.MeshStandardMaterial({ 
-                    color: template.crownColor,
-                    roughness: 0.9
-                });
+                const crownMaterial = this.sharedMaterials[template.crownMaterial];
                 const crown = new THREE.Mesh(crownGeometry, crownMaterial);
                 crown.position.y = template.trunkHeight + template.crownRadius * 0.5;
                 crown.castShadow = true;
@@ -1265,15 +1264,14 @@
                 
                 // 벤치 좌석
                 const seatGeometry = new THREE.BoxGeometry(template.length, 0.1, 0.4);
-                const seatMaterial = new THREE.MeshStandardMaterial({ color: template.color });
-                const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                const seat = new THREE.Mesh(seatGeometry, this.sharedMaterials.bench);
                 seat.position.y = template.height;
                 seat.castShadow = true;
                 group.add(seat);
                 
                 // 등받이
                 const backGeometry = new THREE.BoxGeometry(template.length, 0.5, 0.1);
-                const back = new THREE.Mesh(backGeometry, seatMaterial);
+                const back = new THREE.Mesh(backGeometry, this.sharedMaterials.bench);
                 back.position.set(0, template.height + 0.25, -0.15);
                 back.castShadow = true;
                 group.add(back);
@@ -1281,7 +1279,7 @@
                 // 다리
                 const legGeometry = new THREE.CylinderGeometry(0.05, 0.05, template.height, 8);
                 for (let i = 0; i < 4; i++) {
-                    const leg = new THREE.Mesh(legGeometry, seatMaterial);
+                    const leg = new THREE.Mesh(legGeometry, this.sharedMaterials.bench);
                     leg.position.set(
                         (i % 2 === 0 ? -1 : 1) * template.length / 2.5,
                         template.height / 2,
@@ -1313,8 +1311,7 @@
                 
                 // 기둥
                 const poleGeometry = new THREE.CylinderGeometry(0.05, 0.05, template.height, 8);
-                const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
-                const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+                const pole = new THREE.Mesh(poleGeometry, this.sharedMaterials.pole);
                 pole.position.y = template.height / 2;
                 group.add(pole);
                 
@@ -1322,11 +1319,7 @@
                 const signGeometry = template.type === 'traffic' ? 
                     new THREE.CylinderGeometry(template.size, template.size, 0.05, 32) :
                     new THREE.BoxGeometry(template.size, template.size, 0.05);
-                const signMaterial = new THREE.MeshStandardMaterial({ 
-                    color: template.color,
-                    roughness: 0.5
-                });
-                const sign = new THREE.Mesh(signGeometry, signMaterial);
+                const sign = new THREE.Mesh(signGeometry, this.sharedMaterials[template.material]);
                 sign.position.y = template.height;
                 sign.rotation.x = Math.PI / 2;
                 group.add(sign);
@@ -1351,11 +1344,7 @@
             createVegetation(x, z, template) {
                 if (template.type === 'bush') {
                     const bushGeometry = new THREE.SphereGeometry(template.radius, 8, 8);
-                    const bushMaterial = new THREE.MeshStandardMaterial({ 
-                        color: template.color,
-                        roughness: 0.9
-                    });
-                    const bush = new THREE.Mesh(bushGeometry, bushMaterial);
+                    const bush = new THREE.Mesh(bushGeometry, this.sharedMaterials[template.material]);
                     bush.position.set(x + (Math.random() - 0.5), template.height / 2, z);
                     bush.scale.y = template.height / template.radius;
                     bush.castShadow = true;
@@ -1363,11 +1352,7 @@
                     this.generatedElements.push({ mesh: bush });
                 } else {
                     const flowerGeometry = new THREE.BoxGeometry(template.width, template.height, template.length);
-                    const flowerMaterial = new THREE.MeshStandardMaterial({ 
-                        color: template.color,
-                        roughness: 0.7
-                    });
-                    const flower = new THREE.Mesh(flowerGeometry, flowerMaterial);
+                    const flower = new THREE.Mesh(flowerGeometry, this.sharedMaterials[template.material]);
                     flower.position.set(x + (Math.random() - 0.5), template.height / 2, z);
                     scene.add(flower);
                     this.generatedElements.push({ mesh: flower });
