@@ -78,6 +78,94 @@
             font-size: 24px;
             z-index: 1000;
         }
+        #mobile-menu {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 200;
+        }
+        #menu-button {
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #4ecdc4;
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #menu-button:active {
+            background: rgba(0, 0, 0, 0.9);
+        }
+        #menu-panel {
+            position: absolute;
+            top: 60px;
+            right: 0;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #4ecdc4;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #menu-panel.active {
+            display: block;
+        }
+        .menu-item {
+            padding: 12px;
+            margin: 5px 0;
+            background: rgba(78, 205, 196, 0.2);
+            border: 1px solid #4ecdc4;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            text-align: center;
+            font-size: 14px;
+            user-select: none;
+        }
+        .menu-item:active {
+            background: rgba(78, 205, 196, 0.4);
+        }
+        .menu-toggle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-switch {
+            width: 50px;
+            height: 25px;
+            background: #ccc;
+            border-radius: 15px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle-switch.on {
+            background: #4ecdc4;
+        }
+        .toggle-slider {
+            width: 21px;
+            height: 21px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: left 0.3s;
+        }
+        .toggle-switch.on .toggle-slider {
+            left: 27px;
+        }
+        .menu-divider {
+            height: 1px;
+            background: #4ecdc4;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -91,7 +179,10 @@
         <p><span class="key">Space</span> 양쪽 바퀴 전진</p>
         <p><span class="key">V</span> 시점 전환 (1인칭/쿼터뷰)</p>
         <p><span class="key">R</span> 리셋</p>
+        <p><span class="key">A</span> AI 모드 토글</p>
+        <p><span class="key">G</span> AI 맵 생성</p>
         <p style="margin-top:10px; font-size:12px; color:#95a5a6;">💡 좌우 바퀴를 다르게 조작하면 회전합니다</p>
+        <p id="ai-status" style="margin-top:5px; font-size:12px; color:#4ecdc4;"></p>
     </div>
 
     <div id="stats">
@@ -108,16 +199,48 @@
             <span id="speed">0.0 m/s</span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">왼팔 힘:</span>
-            <span id="left-force">0%</span>
+            <span class="stat-label">AI 모드:</span>
+            <span id="ai-mode">OFF</span>
         </div>
         <div class="stat-item">
-            <span class="stat-label">오른팔 힘:</span>
-            <span id="right-force">0%</span>
+            <span class="stat-label">휠체어 폭:</span>
+            <span id="wheelchair-width">1.3m</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">최소 간격:</span>
+            <span id="min-gap">1.5m</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-label">생성 장애물:</span>
+            <span id="obstacle-count">0개</span>
         </div>
         <div class="stat-item">
             <span class="stat-label">시점:</span>
             <span id="view-mode">쿼터뷰</span>
+        </div>
+    </div>
+
+    <!-- 모바일 메뉴 -->
+    <div id="mobile-menu">
+        <div id="menu-button">☰</div>
+        <div id="menu-panel">
+            <div class="menu-item menu-toggle">
+                <span>🤖 AI 모드</span>
+                <div class="toggle-switch" id="ai-toggle">
+                    <div class="toggle-slider"></div>
+                </div>
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" id="generate-map-btn">
+                🗺️ 맵 생성 (G)
+            </div>
+            <div class="menu-item" id="reset-btn">
+                🔄 리셋 (R)
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" id="view-toggle-btn">
+                📷 시점 전환 (V)
+            </div>
         </div>
     </div>
 
@@ -154,7 +277,14 @@
             playing: false,
             coins: 0,
             timeLeft: 60,
-            won: false
+            won: false,
+            aiMode: false,
+            aiLearning: false,
+            wheelchairWidth: 1.3, // 휠체어 폭 측정값
+            minPassableGap: 1.5, // AI가 계산한 최소 통과 가능 간격
+            generatedObstacles: [],
+            aiPath: [],
+            aiCurrentTarget: null
         };
 
         // Three.js 설정
@@ -665,6 +795,527 @@
             return finish;
         }
 
+        // AI 제어 시스템
+        class AIController {
+            constructor() {
+                this.learning = false;
+                this.exploring = false;
+                this.exploredArea = [];
+                this.testGaps = [2.0, 1.8, 1.6, 1.5, 1.4, 1.3, 1.2];
+                this.currentGapIndex = 0;
+                this.passableGaps = [];
+                this.targetPosition = null;
+                this.pathPoints = [];
+                this.obstacleGenerationPoints = [];
+                
+                // 거리 요소 탬플릿
+                this.streetElements = {
+                    buildings: [
+                        { type: 'residential', height: [8, 15], width: [6, 10], color: 0xcccccc },
+                        { type: 'commercial', height: [12, 20], width: [8, 15], color: 0x9e9e9e },
+                        { type: 'modern', height: [15, 25], width: [10, 18], color: 0x607d8b }
+                    ],
+                    streetLights: [
+                        { height: 4, poleRadius: 0.08, lampSize: 0.3, color: 0xffd700 },
+                        { height: 5, poleRadius: 0.1, lampSize: 0.4, color: 0xffa500 }
+                    ],
+                    trees: [
+                        { trunkHeight: 2, trunkRadius: 0.2, crownRadius: 1.5, crownColor: 0x2d5016 },
+                        { trunkHeight: 3, trunkRadius: 0.3, crownRadius: 2, crownColor: 0x3a6b1c }
+                    ],
+                    benches: [
+                        { length: 1.5, height: 0.5, color: 0x8b4513 }
+                    ],
+                    signs: [
+                        { type: 'traffic', height: 2, size: 0.5, color: 0xff0000 },
+                        { type: 'info', height: 1.5, size: 0.4, color: 0x0066cc }
+                    ],
+                    vegetation: [
+                        { type: 'bush', radius: 0.5, height: 0.8, color: 0x4a7c59 },
+                        { type: 'flowerbed', width: 2, length: 1, height: 0.3, color: 0xff69b4 }
+                    ]
+                };
+                
+                this.generatedElements = [];
+            }
+
+            startLearning(wheelchair) {
+                this.learning = true;
+                this.exploring = true;
+                gameState.aiLearning = true;
+                console.log('AI 학습 시작: 휠체어 폭 측정 중...');
+                
+                // 휠체어 실제 폭 측정
+                const width = wheelchair.group.children.find(c => c === wheelchair.seat);
+                if (width) {
+                    gameState.wheelchairWidth = 1.3; // 실제 측정값
+                    document.getElementById('wheelchair-width').textContent = gameState.wheelchairWidth.toFixed(2) + 'm';
+                }
+                
+                // 최초 탐색 목표 설정
+                this.setNextExplorationTarget();
+            }
+
+            setNextExplorationTarget() {
+                // 랜덤한 탐색 포인트 설정
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 5 + Math.random() * 10;
+                this.targetPosition = {
+                    x: Math.cos(angle) * distance,
+                    z: Math.sin(angle) * distance - 10
+                };
+                gameState.aiCurrentTarget = this.targetPosition;
+                this.pathPoints.push({...this.targetPosition});
+            }
+
+            update(wheelchair) {
+                if (!gameState.aiMode) return;
+
+                const pos = wheelchair.body.position;
+                
+                // 탐색 중
+                if (this.exploring && this.targetPosition) {
+                    const dx = this.targetPosition.x - pos.x;
+                    const dz = this.targetPosition.z - pos.z;
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    
+                    if (distance < 1) {
+                        // 목표 도달, 새로운 장애물 생성 포인트 기록
+                        this.obstacleGenerationPoints.push({
+                            x: pos.x,
+                            z: pos.z,
+                            gap: this.calculateOptimalGap()
+                        });
+                        
+                        // 다음 목표 설정
+                        if (this.pathPoints.length < 10) {
+                            this.setNextExplorationTarget();
+                        } else {
+                            this.exploring = false;
+                            console.log('탐색 완료, 맵 생성 준비 완료');
+                        }
+                    } else {
+                        // 목표를 향해 이동
+                        return this.navigateToTarget(wheelchair, dx, dz, distance);
+                    }
+                }
+                
+                // 기본 전진
+                return { left: 3, right: 3 };
+            }
+
+            navigateToTarget(wheelchair, dx, dz, distance) {
+                // 목표 각도 계산
+                const targetAngle = Math.atan2(dx, -dz);
+                const currentRotation = new CANNON.Vec3();
+                wheelchair.body.quaternion.toEuler(currentRotation);
+                const currentAngle = currentRotation.y;
+                
+                let angleDiff = targetAngle - currentAngle;
+                // 각도 정규화
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                
+                // 회전이 필요한 경우
+                if (Math.abs(angleDiff) > 0.1) {
+                    if (angleDiff > 0) {
+                        return { left: 2, right: 4 }; // 오른쪽으로 회전
+                    } else {
+                        return { left: 4, right: 2 }; // 왼쪽으로 회전
+                    }
+                }
+                
+                // 직진
+                return { left: 4, right: 4 };
+            }
+
+            calculateOptimalGap() {
+                // 휠체어 폭 + 안전 여유분
+                const baseGap = gameState.wheelchairWidth + 0.2;
+                // 난이도에 따라 간격 조정 (좁을수록 어려움)
+                const difficulty = 0.7 + Math.random() * 0.5; // 0.7~1.2
+                return baseGap * difficulty;
+            }
+
+            generateMap() {
+                console.log('AI 맵 생성 시작...');
+                
+                // 기존 생성된 장애물 제거
+                gameState.generatedObstacles.forEach(obs => {
+                    if (obs.mesh) scene.remove(obs.mesh);
+                    if (obs.body) world.removeBody(obs.body);
+                });
+                gameState.generatedObstacles = [];
+                
+                // 기존 거리 요소 제거
+                this.generatedElements.forEach(elem => {
+                    if (elem.mesh) scene.remove(elem.mesh);
+                    if (elem.group) scene.remove(elem.group);
+                });
+                this.generatedElements = [];
+                
+                // 새로운 장애물 코스 생성
+                const courseLength = 40;
+                const segmentCount = 8;
+                const segmentLength = courseLength / segmentCount;
+                
+                for (let i = 0; i < segmentCount; i++) {
+                    const z = 10 - (i + 1) * segmentLength;
+                    const gapSize = this.calculateOptimalGap();
+                    
+                    // 간격의 중심 위치를 랜덤하게
+                    const centerOffset = (Math.random() - 0.5) * 5;
+                    
+                    // 좌측 볼라드 그룹
+                    this.createBollardLine(-8, centerOffset - gapSize/2, z, 3);
+                    
+                    // 우측 볼라드 그룹
+                    this.createBollardLine(centerOffset + gapSize/2, 8, z, 3);
+                }
+                
+                // 거리 요소 생성
+                this.generateStreetElements();
+                
+                console.log(`맵 생성 완료: ${gameState.generatedObstacles.length}개 장애물, ${this.generatedElements.length}개 거리 요소`);
+                document.getElementById('obstacle-count').textContent = gameState.generatedObstacles.length + '개';
+                document.getElementById('min-gap').textContent = this.calculateOptimalGap().toFixed(2) + 'm';
+            }
+
+            createBollardLine(startX, endX, z, count) {
+                const bollardGeometry = new THREE.CylinderGeometry(0.15, 0.2, 0.8, 16);
+                const bollardMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xe74c3c,
+                    roughness: 0.7,
+                    emissive: 0xe74c3c,
+                    emissiveIntensity: 0.2
+                });
+                
+                const spacing = (endX - startX) / (count - 1);
+                
+                for (let i = 0; i < count; i++) {
+                    const x = startX + spacing * i;
+                    
+                    const bollard = new THREE.Mesh(bollardGeometry, bollardMaterial);
+                    const bollardBody = new CANNON.Body({
+                        mass: 0,
+                        shape: new CANNON.Cylinder(0.15, 0.2, 0.8, 16)
+                    });
+                    
+                    bollard.position.set(x, 0.4, z);
+                    bollardBody.position.set(x, 0.4, z);
+                    bollard.castShadow = true;
+                    
+                    scene.add(bollard);
+                    world.addBody(bollardBody);
+                    
+                    gameState.generatedObstacles.push({ mesh: bollard, body: bollardBody });
+                }
+            }
+
+            generateStreetElements() {
+                console.log('거리 요소 생성 중...');
+                
+                // 양쪽에 건물 배치
+                this.generateBuildings();
+                
+                // 가로등 배치
+                this.generateStreetLights();
+                
+                // 나무 배치
+                this.generateTrees();
+                
+                // 벤치 및 기타 요소
+                this.generateBenches();
+                
+                // 표지판
+                this.generateSigns();
+                
+                // 식재
+                this.generateVegetation();
+            }
+
+            generateBuildings() {
+                const buildingCount = 6;
+                const spacing = 50 / buildingCount;
+                
+                for (let i = 0; i < buildingCount; i++) {
+                    const z = 15 - i * spacing;
+                    
+                    // 왼쪽 건물
+                    const leftBuilding = this.streetElements.buildings[Math.floor(Math.random() * this.streetElements.buildings.length)];
+                    this.createBuilding(-15, z, leftBuilding);
+                    
+                    // 오른쪽 건물
+                    const rightBuilding = this.streetElements.buildings[Math.floor(Math.random() * this.streetElements.buildings.length)];
+                    this.createBuilding(15, z, rightBuilding);
+                }
+            }
+
+            createBuilding(x, z, template) {
+                const width = template.width[0] + Math.random() * (template.width[1] - template.width[0]);
+                const height = template.height[0] + Math.random() * (template.height[1] - template.height[0]);
+                const depth = 5 + Math.random() * 3;
+                
+                const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                const buildingMaterial = new THREE.MeshStandardMaterial({ 
+                    color: template.color,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                building.position.set(x, height / 2, z);
+                building.castShadow = true;
+                building.receiveShadow = true;
+                
+                // 창문 추가
+                const windowCount = Math.floor(height / 2);
+                for (let i = 0; i < windowCount; i++) {
+                    const windowGeometry = new THREE.BoxGeometry(width * 0.8, 0.8, 0.1);
+                    const windowMaterial = new THREE.MeshStandardMaterial({ 
+                        color: 0x87ceeb,
+                        emissive: 0x87ceeb,
+                        emissiveIntensity: 0.3,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+                    const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                    window.position.set(0, -height/2 + 2 + i * 2, depth/2 + 0.05);
+                    building.add(window);
+                }
+                
+                scene.add(building);
+                this.generatedElements.push({ mesh: building });
+            }
+
+            generateStreetLights() {
+                const lightCount = 10;
+                const spacing = 60 / lightCount;
+                
+                for (let i = 0; i < lightCount; i++) {
+                    const z = 15 - i * spacing;
+                    const template = this.streetElements.streetLights[Math.floor(Math.random() * this.streetElements.streetLights.length)];
+                    
+                    // 왼쪽 가로등
+                    this.createStreetLight(-11, z, template);
+                    
+                    // 오른쪽 가로등
+                    this.createStreetLight(11, z, template);
+                }
+            }
+
+            createStreetLight(x, z, template) {
+                const group = new THREE.Group();
+                
+                // 기둥
+                const poleGeometry = new THREE.CylinderGeometry(template.poleRadius, template.poleRadius, template.height, 8);
+                const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+                pole.position.y = template.height / 2;
+                pole.castShadow = true;
+                group.add(pole);
+                
+                // 램프
+                const lampGeometry = new THREE.SphereGeometry(template.lampSize, 16, 16);
+                const lampMaterial = new THREE.MeshStandardMaterial({ 
+                    color: template.color,
+                    emissive: template.color,
+                    emissiveIntensity: 0.8
+                });
+                const lamp = new THREE.Mesh(lampGeometry, lampMaterial);
+                lamp.position.y = template.height;
+                group.add(lamp);
+                
+                // 점광원
+                const light = new THREE.PointLight(template.color, 1, 10);
+                light.position.y = template.height;
+                light.castShadow = true;
+                group.add(light);
+                
+                group.position.set(x, 0, z);
+                scene.add(group);
+                this.generatedElements.push({ group: group });
+            }
+
+            generateTrees() {
+                const treeCount = 12;
+                const spacing = 60 / treeCount;
+                
+                for (let i = 0; i < treeCount; i++) {
+                    const z = 15 - i * spacing;
+                    const template = this.streetElements.trees[Math.floor(Math.random() * this.streetElements.trees.length)];
+                    
+                    // 왼쪽 나무
+                    if (Math.random() > 0.3) {
+                        this.createTree(-12.5, z, template);
+                    }
+                    
+                    // 오른쪽 나무
+                    if (Math.random() > 0.3) {
+                        this.createTree(12.5, z, template);
+                    }
+                }
+            }
+
+            createTree(x, z, template) {
+                const group = new THREE.Group();
+                
+                // 나무 기둥
+                const trunkGeometry = new THREE.CylinderGeometry(template.trunkRadius, template.trunkRadius, template.trunkHeight, 8);
+                const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.y = template.trunkHeight / 2;
+                trunk.castShadow = true;
+                group.add(trunk);
+                
+                // 나무 잎
+                const crownGeometry = new THREE.SphereGeometry(template.crownRadius, 8, 8);
+                const crownMaterial = new THREE.MeshStandardMaterial({ 
+                    color: template.crownColor,
+                    roughness: 0.9
+                });
+                const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+                crown.position.y = template.trunkHeight + template.crownRadius * 0.5;
+                crown.castShadow = true;
+                group.add(crown);
+                
+                group.position.set(x, 0, z);
+                scene.add(group);
+                this.generatedElements.push({ group: group });
+            }
+
+            generateBenches() {
+                const benchCount = 5;
+                const spacing = 60 / benchCount;
+                
+                for (let i = 0; i < benchCount; i++) {
+                    const z = 15 - i * spacing;
+                    const template = this.streetElements.benches[0];
+                    
+                    if (Math.random() > 0.5) {
+                        this.createBench(-11.5, z, template);
+                    } else {
+                        this.createBench(11.5, z, template);
+                    }
+                }
+            }
+
+            createBench(x, z, template) {
+                const group = new THREE.Group();
+                
+                // 벤치 좌석
+                const seatGeometry = new THREE.BoxGeometry(template.length, 0.1, 0.4);
+                const seatMaterial = new THREE.MeshStandardMaterial({ color: template.color });
+                const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                seat.position.y = template.height;
+                seat.castShadow = true;
+                group.add(seat);
+                
+                // 등받이
+                const backGeometry = new THREE.BoxGeometry(template.length, 0.5, 0.1);
+                const back = new THREE.Mesh(backGeometry, seatMaterial);
+                back.position.set(0, template.height + 0.25, -0.15);
+                back.castShadow = true;
+                group.add(back);
+                
+                // 다리
+                const legGeometry = new THREE.CylinderGeometry(0.05, 0.05, template.height, 8);
+                for (let i = 0; i < 4; i++) {
+                    const leg = new THREE.Mesh(legGeometry, seatMaterial);
+                    leg.position.set(
+                        (i % 2 === 0 ? -1 : 1) * template.length / 2.5,
+                        template.height / 2,
+                        (i < 2 ? -1 : 1) * 0.15
+                    );
+                    group.add(leg);
+                }
+                
+                group.position.set(x, 0, z);
+                scene.add(group);
+                this.generatedElements.push({ group: group });
+            }
+
+            generateSigns() {
+                const signCount = 4;
+                const spacing = 60 / signCount;
+                
+                for (let i = 0; i < signCount; i++) {
+                    const z = 15 - i * spacing;
+                    const template = this.streetElements.signs[Math.floor(Math.random() * this.streetElements.signs.length)];
+                    
+                    const side = Math.random() > 0.5 ? -10.5 : 10.5;
+                    this.createSign(side, z, template);
+                }
+            }
+
+            createSign(x, z, template) {
+                const group = new THREE.Group();
+                
+                // 기둥
+                const poleGeometry = new THREE.CylinderGeometry(0.05, 0.05, template.height, 8);
+                const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                const pole = new THREE.Mesh(poleGeometry, poleMaterial);
+                pole.position.y = template.height / 2;
+                group.add(pole);
+                
+                // 표지판
+                const signGeometry = template.type === 'traffic' ? 
+                    new THREE.CylinderGeometry(template.size, template.size, 0.05, 32) :
+                    new THREE.BoxGeometry(template.size, template.size, 0.05);
+                const signMaterial = new THREE.MeshStandardMaterial({ 
+                    color: template.color,
+                    roughness: 0.5
+                });
+                const sign = new THREE.Mesh(signGeometry, signMaterial);
+                sign.position.y = template.height;
+                sign.rotation.x = Math.PI / 2;
+                group.add(sign);
+                
+                group.position.set(x, 0, z);
+                scene.add(group);
+                this.generatedElements.push({ group: group });
+            }
+
+            generateVegetation() {
+                const vegCount = 15;
+                
+                for (let i = 0; i < vegCount; i++) {
+                    const z = 15 - Math.random() * 60;
+                    const x = Math.random() > 0.5 ? -11 : 11;
+                    const template = this.streetElements.vegetation[Math.floor(Math.random() * this.streetElements.vegetation.length)];
+                    
+                    this.createVegetation(x, z, template);
+                }
+            }
+
+            createVegetation(x, z, template) {
+                if (template.type === 'bush') {
+                    const bushGeometry = new THREE.SphereGeometry(template.radius, 8, 8);
+                    const bushMaterial = new THREE.MeshStandardMaterial({ 
+                        color: template.color,
+                        roughness: 0.9
+                    });
+                    const bush = new THREE.Mesh(bushGeometry, bushMaterial);
+                    bush.position.set(x + (Math.random() - 0.5), template.height / 2, z);
+                    bush.scale.y = template.height / template.radius;
+                    bush.castShadow = true;
+                    scene.add(bush);
+                    this.generatedElements.push({ mesh: bush });
+                } else {
+                    const flowerGeometry = new THREE.BoxGeometry(template.width, template.height, template.length);
+                    const flowerMaterial = new THREE.MeshStandardMaterial({ 
+                        color: template.color,
+                        roughness: 0.7
+                    });
+                    const flower = new THREE.Mesh(flowerGeometry, flowerMaterial);
+                    flower.position.set(x + (Math.random() - 0.5), template.height / 2, z);
+                    scene.add(flower);
+                    this.generatedElements.push({ mesh: flower });
+                }
+            }
+        }
+
+        const aiController = new AIController();
+
         // 게임 객체 생성
         const wheelchair = new Wheelchair();
         const leftArm = new Arm('left');
@@ -768,10 +1419,91 @@
             if (e.key.toLowerCase() === 'r') {
                 wheelchair.reset();
             }
+            
+            if (e.key.toLowerCase() === 'a') {
+                gameState.aiMode = !gameState.aiMode;
+                document.getElementById('ai-mode').textContent = gameState.aiMode ? 'ON' : 'OFF';
+                document.getElementById('ai-status').textContent = gameState.aiMode ? 
+                    '🤖 AI 활성화 - 자동 주행 중' : '';
+                
+                if (gameState.aiMode) {
+                    aiController.startLearning(wheelchair);
+                }
+            }
+            
+            if (e.key.toLowerCase() === 'g') {
+                aiController.generateMap();
+                wheelchair.reset();
+            }
         });
 
         document.addEventListener('keyup', (e) => {
             gameState.keys[e.key.toLowerCase()] = false;
+        });
+
+        // 모바일 메뉴 이벤트
+        const menuButton = document.getElementById('menu-button');
+        const menuPanel = document.getElementById('menu-panel');
+        const aiToggle = document.getElementById('ai-toggle');
+        const generateMapBtn = document.getElementById('generate-map-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const viewToggleBtn = document.getElementById('view-toggle-btn');
+
+        // 메뉴 열기/닫기
+        menuButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menuPanel.classList.toggle('active');
+        });
+
+        // 메뉴 외부 클릭시 닫기
+        document.addEventListener('click', (e) => {
+            if (!menuPanel.contains(e.target) && e.target !== menuButton) {
+                menuPanel.classList.remove('active');
+            }
+        });
+
+        // AI 모드 토글
+        aiToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            gameState.aiMode = !gameState.aiMode;
+            aiToggle.classList.toggle('on', gameState.aiMode);
+            document.getElementById('ai-mode').textContent = gameState.aiMode ? 'ON' : 'OFF';
+            document.getElementById('ai-status').textContent = gameState.aiMode ? 
+                '🤖 AI 활성화 - 자동 주행 중' : '';
+            
+            if (gameState.aiMode) {
+                aiController.startLearning(wheelchair);
+            }
+        });
+
+        // 맵 생성 버튼
+        generateMapBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            aiController.generateMap();
+            wheelchair.reset();
+            menuPanel.classList.remove('active');
+        });
+
+        // 리셋 버튼
+        resetBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            wheelchair.reset();
+            menuPanel.classList.remove('active');
+        });
+
+        // 시점 전환 버튼
+        viewToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const modes = ['quarter', 'first-person', 'third-person'];
+            const currentIndex = modes.indexOf(gameState.viewMode);
+            gameState.viewMode = modes[(currentIndex + 1) % modes.length];
+            
+            const modeNames = {
+                'quarter': '쿼터뷰',
+                'first-person': '1인칭',
+                'third-person': '3인칭'
+            };
+            document.getElementById('view-mode').textContent = modeNames[gameState.viewMode];
         });
 
         // 애니메이션 루프
@@ -795,36 +1527,58 @@
             let leftAngle = 0;
             let rightAngle = 0;
 
-            // 왼쪽 바퀴 제어 (WASD)
-            if (gameState.keys['w']) {
-                leftWheelSpeed += wheelchair.maxWheelSpeed;
-                leftForce = 1;
-                leftAngle = -0.8;
-            }
-            if (gameState.keys['s']) {
-                leftWheelSpeed -= wheelchair.maxWheelSpeed;
-                leftForce = 0.5;
-                leftAngle = 0.5;
-            }
+            // AI 모드일 때는 AI가 제어
+            if (gameState.aiMode) {
+                const aiControl = aiController.update(wheelchair);
+                leftWheelSpeed = aiControl.left;
+                rightWheelSpeed = aiControl.right;
+                leftForce = rightForce = 0.8;
+                leftAngle = rightAngle = -0.6;
+            } else {
+                // 모바일 조이스틱 입력
+                if (leftJoystickData.active) {
+                    leftWheelSpeed = leftJoystickData.speedY * wheelchair.maxWheelSpeed;
+                    leftForce = Math.abs(leftJoystickData.speedY);
+                    leftAngle = leftJoystickData.speedY > 0 ? 0.5 : -0.8;
+                }
+                if (rightJoystickData.active) {
+                    rightWheelSpeed = rightJoystickData.speedY * wheelchair.maxWheelSpeed;
+                    rightForce = Math.abs(rightJoystickData.speedY);
+                    rightAngle = rightJoystickData.speedY > 0 ? 0.5 : -0.8;
+                }
 
-            // 오른쪽 바퀴 제어 (방향키)
-            if (gameState.keys['arrowup']) {
-                rightWheelSpeed += wheelchair.maxWheelSpeed;
-                rightForce = 1;
-                rightAngle = -0.8;
-            }
-            if (gameState.keys['arrowdown']) {
-                rightWheelSpeed -= wheelchair.maxWheelSpeed;
-                rightForce = 0.5;
-                rightAngle = 0.5;
-            }
+                // 수동 제어 (키보드)
+                // 왼쪽 바퀴 제어 (WASD)
+                if (gameState.keys['w']) {
+                    leftWheelSpeed += wheelchair.maxWheelSpeed;
+                    leftForce = 1;
+                    leftAngle = -0.8;
+                }
+                if (gameState.keys['s']) {
+                    leftWheelSpeed -= wheelchair.maxWheelSpeed;
+                    leftForce = 0.5;
+                    leftAngle = 0.5;
+                }
 
-            // 스페이스바 - 양쪽 바퀴 동시 전진
-            if (gameState.keys[' ']) {
-                leftWheelSpeed = wheelchair.maxWheelSpeed;
-                rightWheelSpeed = wheelchair.maxWheelSpeed;
-                leftForce = rightForce = 1;
-                leftAngle = rightAngle = -0.8;
+                // 오른쪽 바퀴 제어 (방향키)
+                if (gameState.keys['arrowup']) {
+                    rightWheelSpeed += wheelchair.maxWheelSpeed;
+                    rightForce = 1;
+                    rightAngle = -0.8;
+                }
+                if (gameState.keys['arrowdown']) {
+                    rightWheelSpeed -= wheelchair.maxWheelSpeed;
+                    rightForce = 0.5;
+                    rightAngle = 0.5;
+                }
+
+                // 스페이스바 - 양쪽 바퀴 동시 전진
+                if (gameState.keys[' ']) {
+                    leftWheelSpeed = wheelchair.maxWheelSpeed;
+                    rightWheelSpeed = wheelchair.maxWheelSpeed;
+                    leftForce = rightForce = 1;
+                    leftAngle = rightAngle = -0.8;
+                }
             }
 
             // 바퀴 힘 적용
