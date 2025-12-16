@@ -166,6 +166,38 @@
             background: #4ecdc4;
             margin: 10px 0;
         }
+        /* 모바일 조이스틱 */
+        .joystick {
+            position: absolute;
+            bottom: 30px;
+            width: 120px;
+            height: 120px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 3px solid rgba(78, 205, 196, 0.5);
+            border-radius: 50%;
+            display: none;
+            z-index: 100;
+        }
+        .joystick.active {
+            display: block;
+        }
+        .joystick-stick {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(78, 205, 196, 0.7);
+            border: 2px solid #4ecdc4;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #left-joystick {
+            left: 30px;
+        }
+        #right-joystick {
+            right: 30px;
+        }
     </style>
 </head>
 <body>
@@ -242,6 +274,14 @@
                 📷 시점 전환 (V)
             </div>
         </div>
+    </div>
+
+    <!-- 모바일 조이스틱 -->
+    <div id="left-joystick" class="joystick">
+        <div class="joystick-stick"></div>
+    </div>
+    <div id="right-joystick" class="joystick">
+        <div class="joystick-stick"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1449,6 +1489,10 @@
         const resetBtn = document.getElementById('reset-btn');
         const viewToggleBtn = document.getElementById('view-toggle-btn');
 
+        // 모바일 조이스틱 데이터
+        let leftJoystickData = { active: false, speedY: 0 };
+        let rightJoystickData = { active: false, speedY: 0 };
+
         // 메뉴 열기/닫기
         menuButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1505,6 +1549,84 @@
             };
             document.getElementById('view-mode').textContent = modeNames[gameState.viewMode];
         });
+
+        // 모바일 조이스틱 이벤트
+        const leftJoystick = document.getElementById('left-joystick');
+        const rightJoystick = document.getElementById('right-joystick');
+        
+        if (leftJoystick && rightJoystick) {
+            const leftStick = leftJoystick.querySelector('.joystick-stick');
+            const rightStick = rightJoystick.querySelector('.joystick-stick');
+            
+            // 터치 이벤트 헬퍼
+            function handleJoystickTouch(joystick, stick, data, e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = joystick.getBoundingClientRect();
+                const centerY = rect.top + rect.height / 2;
+                const deltaY = touch.clientY - centerY;
+                const maxDistance = 35;
+                
+                const clampedY = Math.max(-maxDistance, Math.min(maxDistance, deltaY));
+                stick.style.top = `calc(50% + ${clampedY}px)`;
+                
+                data.speedY = -clampedY / maxDistance;
+            }
+
+            function resetJoystick(stick, data) {
+                stick.style.top = '50%';
+                data.speedY = 0;
+                data.active = false;
+            }
+
+            // 왼쪽 조이스틱
+            leftJoystick.addEventListener('touchstart', (e) => {
+                leftJoystickData.active = true;
+                leftJoystick.classList.add('active');
+            });
+
+            leftJoystick.addEventListener('touchmove', (e) => {
+                if (leftJoystickData.active) {
+                    handleJoystickTouch(leftJoystick, leftStick, leftJoystickData, e);
+                }
+            });
+
+            leftJoystick.addEventListener('touchend', () => {
+                resetJoystick(leftStick, leftJoystickData);
+                leftJoystick.classList.remove('active');
+            });
+
+            // 오른쪽 조이스틱
+            rightJoystick.addEventListener('touchstart', (e) => {
+                rightJoystickData.active = true;
+                rightJoystick.classList.add('active');
+            });
+
+            rightJoystick.addEventListener('touchmove', (e) => {
+                if (rightJoystickData.active) {
+                    handleJoystickTouch(rightJoystick, rightStick, rightJoystickData, e);
+                }
+            });
+
+            rightJoystick.addEventListener('touchend', () => {
+                resetJoystick(rightStick, rightJoystickData);
+                rightJoystick.classList.remove('active');
+            });
+
+            // 화면 터치 시 조이스틱 표시
+            document.addEventListener('touchstart', (e) => {
+                if (gameState.aiMode) return;
+                
+                const touch = e.touches[0];
+                const screenWidth = window.innerWidth;
+                
+                if (touch.clientX < screenWidth / 2) {
+                    leftJoystick.classList.add('active');
+                } else {
+                    rightJoystick.classList.add('active');
+                }
+            });
+        }
 
         // 애니메이션 루프
         let lastTime = Date.now();
