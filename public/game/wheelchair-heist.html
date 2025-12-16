@@ -351,6 +351,17 @@
             <div class="win-rate cop-stat" id="cop-winrate">0%</div>
             <div class="strategy" id="cop-strategy">학습 중...</div>
         </div>
+        
+        <!-- AI 모드 토글 -->
+        <div class="generation-box" style="background: rgba(255, 215, 0, 0.2); border: 2px solid #ffd700; margin-top: 15px;">
+            <h3 style="color: #ffd700;">🤖 AI 모드</h3>
+            <button class="control-btn" id="btn-ai-mode" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 14px;">
+                🦽 도둑만 AI
+            </button>
+            <div style="margin-top: 10px; font-size: 12px; color: #aaa; text-align: center;" id="ai-mode-desc">
+                경찰: 플레이어 조작
+            </div>
+        </div>
     </div>
     
     <!-- 거리 게이지 -->
@@ -398,6 +409,8 @@
                 round: 1,
                 startTime: 0,
                 elapsedTime: 0,
+                
+                aiMode: 'thief-only', // 'thief-only', 'both', 'cop-only'
                 
                 thiefGeneration: 1,
                 copGeneration: 1,
@@ -526,12 +539,52 @@
                     this.turnSpeed = 0.08;
                     this.targetAngle = 0;
                     
-                    // 휠체어 바디
-                    const geometry = new THREE.BoxGeometry(0.8, 0.6, 1.2);
-                    this.mesh = new THREE.Mesh(geometry, sharedMaterials.thief);
+                    // 휠체어 그룹
+                    this.mesh = new THREE.Group();
                     this.mesh.position.set(x, 0.3, z);
-                    this.mesh.castShadow = true;
                     scene.add(this.mesh);
+                    
+                    // 휠체어 좌석
+                    const seatGeom = new THREE.BoxGeometry(0.7, 0.1, 0.7);
+                    const seat = new THREE.Mesh(seatGeom, sharedMaterials.thief);
+                    seat.position.y = 0;
+                    seat.castShadow = true;
+                    this.mesh.add(seat);
+                    
+                    // 휠체어 등받이
+                    const backGeom = new THREE.BoxGeometry(0.7, 0.6, 0.1);
+                    const back = new THREE.Mesh(backGeom, sharedMaterials.thief);
+                    back.position.set(0, 0.3, -0.3);
+                    back.castShadow = true;
+                    this.mesh.add(back);
+                    
+                    // 사람 몸통
+                    const bodyGeom = new THREE.BoxGeometry(0.4, 0.5, 0.3);
+                    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xff8844 });
+                    const body = new THREE.Mesh(bodyGeom, bodyMat);
+                    body.position.set(0, 0.45, -0.1);
+                    body.castShadow = true;
+                    this.mesh.add(body);
+                    
+                    // 사람 머리
+                    const headGeom = new THREE.SphereGeometry(0.2, 8, 8);
+                    const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+                    const head = new THREE.Mesh(headGeom, headMat);
+                    head.position.set(0, 0.85, -0.1);
+                    head.castShadow = true;
+                    this.mesh.add(head);
+                    
+                    // 팔
+                    const armGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.4, 6);
+                    const leftArm = new THREE.Mesh(armGeom, bodyMat);
+                    leftArm.position.set(-0.25, 0.4, -0.1);
+                    leftArm.rotation.z = Math.PI / 6;
+                    this.mesh.add(leftArm);
+                    
+                    const rightArm = new THREE.Mesh(armGeom, bodyMat);
+                    rightArm.position.set(0.25, 0.4, -0.1);
+                    rightArm.rotation.z = -Math.PI / 6;
+                    this.mesh.add(rightArm);
                     
                     // 물리 바디
                     const shape = new CANNON.Box(new CANNON.Vec3(0.4, 0.3, 0.6));
@@ -636,15 +689,67 @@
                     this.turnSpeed = 0.12;
                     this.targetAngle = 0;
                     
-                    // 경찰 모델
-                    const bodyGeom = new THREE.CylinderGeometry(0.3, 0.3, 1.5, 8);
-                    this.mesh = new THREE.Mesh(bodyGeom, sharedMaterials.cop);
-                    this.mesh.position.set(x, 0.75, z);
-                    this.mesh.castShadow = true;
+                    // 경찰 그룹
+                    this.mesh = new THREE.Group();
+                    this.mesh.position.set(x, 0, z);
                     scene.add(this.mesh);
                     
+                    // 다리
+                    const legGeom = new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8);
+                    const legMat = new THREE.MeshStandardMaterial({ color: 0x000088 });
+                    const leftLeg = new THREE.Mesh(legGeom, legMat);
+                    leftLeg.position.set(-0.15, 0.4, 0);
+                    leftLeg.castShadow = true;
+                    this.mesh.add(leftLeg);
+                    
+                    const rightLeg = new THREE.Mesh(legGeom, legMat);
+                    rightLeg.position.set(0.15, 0.4, 0);
+                    rightLeg.castShadow = true;
+                    this.mesh.add(rightLeg);
+                    this.leftLeg = leftLeg;
+                    this.rightLeg = rightLeg;
+                    
+                    // 몸통
+                    const bodyGeom = new THREE.BoxGeometry(0.5, 0.7, 0.3);
+                    const body = new THREE.Mesh(bodyGeom, sharedMaterials.cop);
+                    body.position.set(0, 1.15, 0);
+                    body.castShadow = true;
+                    this.mesh.add(body);
+                    
+                    // 머리
+                    const headGeom = new THREE.SphereGeometry(0.25, 8, 8);
+                    const headMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+                    const head = new THREE.Mesh(headGeom, headMat);
+                    head.position.set(0, 1.65, 0);
+                    head.castShadow = true;
+                    this.mesh.add(head);
+                    
+                    // 경찰 모자
+                    const hatGeom = new THREE.CylinderGeometry(0.27, 0.27, 0.15, 8);
+                    const hatMat = new THREE.MeshStandardMaterial({ color: 0x000088 });
+                    const hat = new THREE.Mesh(hatGeom, hatMat);
+                    hat.position.set(0, 1.85, 0);
+                    this.mesh.add(hat);
+                    
+                    // 팔
+                    const armGeom = new THREE.CylinderGeometry(0.1, 0.1, 0.6, 6);
+                    const armMat = new THREE.MeshStandardMaterial({ color: 0x4444ff });
+                    const leftArm = new THREE.Mesh(armGeom, armMat);
+                    leftArm.position.set(-0.35, 1.1, 0);
+                    leftArm.rotation.z = Math.PI / 8;
+                    this.mesh.add(leftArm);
+                    
+                    const rightArm = new THREE.Mesh(armGeom, armMat);
+                    rightArm.position.set(0.35, 1.1, 0);
+                    rightArm.rotation.z = -Math.PI / 8;
+                    this.mesh.add(rightArm);
+                    this.leftArm = leftArm;
+                    this.rightArm = rightArm;
+                    
+                    this.walkCycle = 0;
+                    
                     // 물리 바디
-                    const shape = new CANNON.Cylinder(0.3, 0.3, 1.5, 8);
+                    const shape = new CANNON.Cylinder(0.3, 0.3, 1.8, 8);
                     this.body = new CANNON.Body({
                         mass: 10,
                         material: entityMaterial,
@@ -652,7 +757,7 @@
                         angularDamping: 0.9
                     });
                     this.body.addShape(shape);
-                    this.body.position.set(x, 0.75, z);
+                    this.body.position.set(x, 0.9, z);
                     this.body.fixedRotation = true;
                     world.addBody(this.body);
                 }
@@ -675,7 +780,10 @@
                         }
                     });
                     
-                    if (!nearestThief) return;
+                    if (!nearestThief) {
+                        this.speed = 0;
+                        return;
+                    }
                     
                     // AI 의사결정
                     const decision = this.ai.decide(
@@ -722,6 +830,15 @@
                     // 메시 업데이트
                     this.mesh.position.copy(this.body.position);
                     this.mesh.quaternion.copy(this.body.quaternion);
+                    
+                    // 걷기 애니메이션
+                    if (this.speed > 0.5) {
+                        this.walkCycle += this.speed * 0.2;
+                        this.leftLeg.rotation.x = Math.sin(this.walkCycle) * 0.5;
+                        this.rightLeg.rotation.x = -Math.sin(this.walkCycle) * 0.5;
+                        this.leftArm.rotation.x = -Math.sin(this.walkCycle) * 0.3;
+                        this.rightArm.rotation.x = Math.sin(this.walkCycle) * 0.3;
+                    }
                     
                     // 체포 체크
                     if (minDist < 1.5 && !nearestThief.caught && !nearestThief.escaped) {
@@ -1160,6 +1277,30 @@
                 gameState.speed = speeds[(currentIndex + 1) % speeds.length];
                 document.getElementById('btn-speed').textContent = `⚡ 속도: ${gameState.speed}x`;
                 addLog(`재생 속도: ${gameState.speed}x`, 'system');
+            });
+
+            // AI 모드 토글
+            document.getElementById('btn-ai-mode').addEventListener('click', () => {
+                const modes = ['thief-only', 'both', 'cop-only'];
+                const currentIndex = modes.indexOf(gameState.aiMode);
+                gameState.aiMode = modes[(currentIndex + 1) % modes.length];
+                
+                const btn = document.getElementById('btn-ai-mode');
+                const desc = document.getElementById('ai-mode-desc');
+                
+                if (gameState.aiMode === 'thief-only') {
+                    btn.textContent = '🦽 도둑만 AI';
+                    desc.textContent = '경찰: 플레이어 조작';
+                    addLog('모드: 도둑만 AI (경찰은 플레이어)', 'system');
+                } else if (gameState.aiMode === 'both') {
+                    btn.textContent = '🤖 전부 AI';
+                    desc.textContent = '도둑 & 경찰: AI';
+                    addLog('모드: 전부 AI (관전 모드)', 'system');
+                } else {
+                    btn.textContent = '🚔 경찰만 AI';
+                    desc.textContent = '도둑: 플레이어 조작';
+                    addLog('모드: 경찰만 AI (도둑은 플레이어)', 'system');
+                }
             });
 
             // 모바일 메뉴
