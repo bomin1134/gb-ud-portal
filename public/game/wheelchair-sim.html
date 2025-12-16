@@ -989,12 +989,14 @@
 
             generateMap() {
                 console.log('AI 맵 생성 시작...');
+                console.log('Current scene children count:', scene.children.length);
                 
                 // 기존 생성된 장애물 제거
                 gameState.generatedObstacles.forEach(obs => {
                     if (obs.mesh) scene.remove(obs.mesh);
                     if (obs.body) world.removeBody(obs.body);
                 });
+                console.log('Removed obstacles:', gameState.generatedObstacles.length);
                 gameState.generatedObstacles = [];
                 
                 // 기존 거리 요소 제거
@@ -1002,6 +1004,7 @@
                     if (elem.mesh) scene.remove(elem.mesh);
                     if (elem.group) scene.remove(elem.group);
                 });
+                console.log('Removed street elements:', this.generatedElements.length);
                 this.generatedElements = [];
                 
                 // 새로운 장애물 코스 생성
@@ -1009,12 +1012,16 @@
                 const segmentCount = 8;
                 const segmentLength = courseLength / segmentCount;
                 
+                console.log('Creating', segmentCount, 'segments...');
+                
                 for (let i = 0; i < segmentCount; i++) {
                     const z = 10 - (i + 1) * segmentLength;
                     const gapSize = this.calculateOptimalGap();
                     
                     // 간격의 중심 위치를 랜덤하게
                     const centerOffset = (Math.random() - 0.5) * 5;
+                    
+                    console.log(`Segment ${i}: z=${z}, gap=${gapSize.toFixed(2)}, offset=${centerOffset.toFixed(2)}`);
                     
                     // 좌측 볼라드 그룹
                     this.createBollardLine(-8, centerOffset - gapSize/2, z, 3);
@@ -1024,11 +1031,15 @@
                 }
                 
                 // 거리 요소 생성
+                console.log('Generating street elements...');
                 this.generateStreetElements();
                 
                 console.log(`맵 생성 완료: ${gameState.generatedObstacles.length}개 장애물, ${this.generatedElements.length}개 거리 요소`);
-                document.getElementById('obstacle-count').textContent = gameState.generatedObstacles.length + '개';
-                document.getElementById('min-gap').textContent = this.calculateOptimalGap().toFixed(2) + 'm';
+                console.log('Final scene children count:', scene.children.length);
+                const obstacleCountEl = document.getElementById('obstacle-count');
+                if (obstacleCountEl) obstacleCountEl.textContent = gameState.generatedObstacles.length + '개';
+                const minGapEl = document.getElementById('min-gap');
+                if (minGapEl) minGapEl.textContent = this.calculateOptimalGap().toFixed(2) + 'm';
             }
 
             createBollardLine(startX, endX, z, count) {
