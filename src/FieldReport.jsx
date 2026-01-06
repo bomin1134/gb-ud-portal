@@ -175,44 +175,11 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
     }
   };
 
-  // 좌표로 주소 가져오기 (백엔드 API 호출)
+  // 좌표로 주소 가져오기 (임시로 비활성화)
   const getAddressFromCoords = async (lat, lng) => {
-    try {
-      console.log(`주소 조회 시작: lat=${lat}, lng=${lng}`);
-      
-      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
-      
-      console.log(`응답 상태: ${response.status}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API 오류 응답:', errorText);
-        setAddress('주소를 불러올 수 없습니다');
-        return;
-      }
-      
-      const data = await response.json();
-      console.log('응답 데이터:', data);
-      
-      // Reverse Geocoding 응답 형식 처리
-      if (data.results && data.results[0]) {
-        const result = data.results[0];
-        if (result.region) {
-          const region = result.region;
-          const addr = region.area1.name + ' ' + region.area2.name + ' ' + region.area3.name;
-          console.log('추출된 주소:', addr);
-          setAddress(addr);
-        } else {
-          setAddress('주소를 불러올 수 없습니다');
-        }
-      } else {
-        console.log('예상된 형식의 데이터가 없음');
-        setAddress('주소를 불러올 수 없습니다');
-      }
-    } catch (error) {
-      console.error('주소 조회 오류:', error);
-      setAddress('주소를 불러올 수 없습니다');
-    }
+    // TODO: Naver API 인증 문제 해결 후 활성화
+    setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
+    console.log(`주소 조회 스킵: lat=${lat}, lng=${lng}`);
   };
 
   // 항목 선택

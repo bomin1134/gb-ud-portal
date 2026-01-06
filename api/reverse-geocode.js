@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
   try {
     const coords = `${lng},${lat}`;
-    const url = `https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
+    const url = `https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
 
     console.log('Naver API 요청:', {
       url,
@@ -49,9 +49,8 @@ export default async function handler(req, res) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'x-ncp-apigw-api-key-id': clientId,
-        'x-ncp-apigw-api-key': clientSecret,
-        'Accept': 'application/json'
+        'X-NCP-APIGW-API-KEY-ID': clientId,
+        'X-NCP-APIGW-API-KEY': clientSecret
       }
     });
 
