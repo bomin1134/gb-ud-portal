@@ -177,22 +177,48 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
 
   // 좌표로 주소 가져오기
   const getAddressFromCoords = async (lat, lng) => {
-    try {
-      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
-      
-      if (!response.ok) {
-        throw new Error(`API 오류: ${response.status}`);
-      }
+    // 네이버 지도 SDK의 Geocoder 사용 (클라이언트에서 직접)
+    if (window.naver && window.naver.maps && window.naver.maps.Service) {
+      try {
+        const latlng = new window.naver.maps.LatLng(lat, lng);
+        
+        window.naver.maps.Service.reverseGeocode({
+          coords: latlng,
+          orders: [
+            window.naver.maps.Service.OrderType.ADDR,
+            window.naver.maps.Service.OrderType.ROAD_ADDR
+          ].join(',')
+        }, (status, response) => {
+          if (status === window.naver.maps.Service.Status.ERROR) {
+            console.error('Geocoder 오류:', status);
+            setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
+            return;
+          }
 
-      const data = await response.json();
-      
-      if (data.address) {
-        setAddress(data.address);
-      } else {
+          if (response.v2.meta.totalCount === 0) {
+            setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
+            return;
+          }
+
+          const item = response.v2.address;
+          let addr = '';
+          
+          if (item.roadAddress) {
+            addr = item.roadAddress;
+          } else if (item.jibunAddress) {
+            addr = item.jibunAddress;
+          } else {
+            addr = `${item.area1.name} ${item.area2.name} ${item.area3.name}`;
+          }
+          
+          setAddress(addr);
+        });
+      } catch (error) {
+        console.error('Geocoder 실행 오류:', error);
         setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
       }
-    } catch (error) {
-      console.error('주소 조회 실패:', error);
+    } else {
+      // Geocoder가 없으면 좌표 표시
       setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
     }
   };
