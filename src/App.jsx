@@ -3,6 +3,13 @@ import React, { useEffect, useState, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import FieldReport from "./FieldReport";
 
+// 전역 단일 Supabase 클라이언트 (중복 생성 방지)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_CLIENT = (SUPABASE_URL && SUPABASE_ANON_KEY)
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
 /*
   변경점 (v0.6)
   1) 관리자 화면 탭 추가: [지회 보고 현황] / [주차별 제출현황] / [공지사항]
@@ -180,14 +187,12 @@ function PreviewModal({open, onClose, item}){
 
 // ----------------------------- Store (Supabase or Memory) -----------------------------
 function useStore(){
-  const url   = import.meta.env.VITE_SUPABASE_URL;
-  const key   = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const bucket= import.meta.env.VITE_SUPABASE_BUCKET || "reports";
   const table = import.meta.env.VITE_SUPABASE_TABLE  || "submissions";
   const noticeTable = import.meta.env.VITE_SUPABASE_NOTICE_TABLE || "notices";
 
-  if(url && key){
-    const client=createClient(url,key);
+  if(SUPABASE_CLIENT){
+    const client=SUPABASE_CLIENT;
     return {
       storeType:"supabase",
       // 단건 조회
@@ -1104,7 +1109,7 @@ export default function App(){
           <FieldReport
             user={user}
             branch={branch}
-            supabase={store.storeType==="supabase" ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY) : null}
+            supabase={store.storeType==="supabase" ? SUPABASE_CLIENT : null}
             onBack={()=>setView("BRANCH")}
           />
         )}
