@@ -175,11 +175,26 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
     }
   };
 
-  // 좌표로 주소 가져오기 (임시로 비활성화)
+  // 좌표로 주소 가져오기
   const getAddressFromCoords = async (lat, lng) => {
-    // TODO: Naver API 인증 문제 해결 후 활성화
-    setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
-    console.log(`주소 조회 스킵: lat=${lat}, lng=${lng}`);
+    try {
+      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
+      
+      if (!response.ok) {
+        throw new Error(`API 오류: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.address) {
+        setAddress(data.address);
+      } else {
+        setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
+      }
+    } catch (error) {
+      console.error('주소 조회 실패:', error);
+      setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
+    }
   };
 
   // 항목 선택
