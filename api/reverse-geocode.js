@@ -49,8 +49,8 @@ export default async function handler(req, res) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'X-NCP-APIGW-API-KEY-ID': clientId,
-        'X-NCP-APIGW-API-KEY': clientSecret,
+        'x-ncp-apigw-api-key-id': clientId,
+        'x-ncp-apigw-api-key': clientSecret,
         'Accept': 'application/json'
       }
     });
