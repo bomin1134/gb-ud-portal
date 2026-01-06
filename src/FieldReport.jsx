@@ -84,10 +84,9 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
   // 네이버 지도 초기화
   useEffect(() => {
     const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || 'YOUR_CLIENT_ID';
-    const clientSecret = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET || '';
     
     const script = document.createElement('script');
-    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&clientSecret=${clientSecret}&submodules=geocoder`;
+    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&submodules=geocoder`;
     script.async = true;
     script.onload = () => {
       console.log('네이버 지도 API 로드 완료');
@@ -175,36 +174,31 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
     }
   };
 
-  // 좌표로 주소 가져오기
-  const getAddressFromCoords = (lat, lng) => {
-    if (!window.naver || !window.naver.maps || !window.naver.maps.Service) {
-      setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
-      return;
-    }
-
-    window.naver.maps.Service.reverseGeocode({
-      coords: new window.naver.maps.LatLng(lat, lng),
-      orders: [
-        window.naver.maps.Service.OrderType.ADDR,
-        window.naver.maps.Service.OrderType.ROAD_ADDR
-      ].join(',')
-    }, (status, response) => {
-      if (status === window.naver.maps.Service.Status.ERROR) {
-        setAddress('주소를 찾을 수 없습니다');
+  // 좌표로 주소 가져오기 (백엔드 API 호출)
+  const getAddressFromCoords = async (lat, lng) => {
+    try {
+      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
+      if (!response.ok) {
+        setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
         return;
       }
       
-      const result = response.v2;
-      const addr = result.address;
+      const data = await response.json();
+      const result = data.results[0];
       
-      if (addr.roadAddress) {
-        setAddress(addr.roadAddress);
-      } else if (addr.jibunAddress) {
-        setAddress(addr.jibunAddress);
+      if (result && result.region) {
+        const region = result.region;
+        const addr = region.area1.name + ' ' + region.area2.name + ' ' + region.area3.name;
+        setAddress(addr);
+      } else if (result && result.name) {
+        setAddress(result.name);
       } else {
         setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
       }
-    });
+    } catch (error) {
+      console.error('주소 조회 오류:', error);
+      setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
+    }
   };
 
   // 항목 선택
