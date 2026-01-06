@@ -84,9 +84,10 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
   // 네이버 지도 초기화
   useEffect(() => {
     const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || 'YOUR_CLIENT_ID';
+    const clientSecret = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET || '';
     
     const script = document.createElement('script');
-    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&submodules=geocoder`;
+    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}&clientSecret=${clientSecret}&submodules=geocoder`;
     script.async = true;
     script.onload = () => {
       console.log('네이버 지도 API 로드 완료');
