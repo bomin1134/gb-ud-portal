@@ -175,53 +175,18 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
     }
   };
 
-  // 좌표로 주소 가져오기 (백엔드 API 호출 또는 직접 호출)
+  // 좌표로 주소 가져오기 (백엔드 API 호출)
   const getAddressFromCoords = async (lat, lng) => {
     try {
       console.log(`주소 조회 시작: lat=${lat}, lng=${lng}`);
       
-      // 환경 변수 확인
-      const clientId = import.meta.env.VITE_NAVER_MAP_CLIENT_ID;
-      const clientSecret = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET;
-      
-      if (!clientId || !clientSecret) {
-        console.error('환경 변수 누락:', { clientId, clientSecret });
-        setAddress('API 키가 없습니다');
-        return;
-      }
-      
-      console.log('환경 변수 확인됨');
-      
-      // 직접 Naver 역지오코딩 API 호출
-      const coords = `${lng},${lat}`;
-      const url = `https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
-      
-      console.log('요청 URL:', url);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'X-NCP-APIGW-API-KEY-ID': clientId,
-          'X-NCP-APIGW-API-KEY': clientSecret,
-          'Accept': 'application/json'
-        }
-      });
+      const response = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
       
       console.log(`응답 상태: ${response.status}`);
       
       if (!response.ok) {
         const errorText = await response.text();
         console.error('API 오류 응답:', errorText);
-        setAddress('주소를 불러올 수 없습니다');
-        return;
-      }
-      
-      const contentType = response.headers.get('content-type');
-      console.log(`응답 타입: ${contentType}`);
-      
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('JSON이 아닌 응답:', text);
         setAddress('주소를 불러올 수 없습니다');
         return;
       }
