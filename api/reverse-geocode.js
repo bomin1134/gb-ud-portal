@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
   try {
     const coords = `${lng},${lat}`;
-    const url = `https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
+    const url = `https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
 
     console.log('Naver API 요청:', {
       url,
