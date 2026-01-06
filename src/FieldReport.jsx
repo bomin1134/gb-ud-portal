@@ -203,17 +203,43 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
             return;
           }
 
-          // 첫 번째 결과 사용
-          const result = response.v2.results[0];
-          const region = result.region;
+          // 도로명 주소 우선 검색
+          const roadAddr = response.v2.results.find(r => r.name === 'roadaddr');
+          const jibunAddr = response.v2.results.find(r => r.name === 'addr');
+          
           let addr = '';
           
-          // 도로명 주소 우선
-          if (result.land && result.land.name) {
-            addr = `${region.area1.name} ${region.area2.name} ${region.area3.name} ${result.land.name} ${result.land.number1}`;
-          } else if (region) {
+          if (roadAddr && roadAddr.region && roadAddr.land) {
+            // 도로명 주소
+            const r = roadAddr.region;
+            const l = roadAddr.land;
+            addr = `${r.area1.name} ${r.area2.name} ${r.area3.name} ${l.name} ${l.number1}`;
+            
+            // 건물명 추가
+            if (l.addition0 && l.addition0.value) {
+              addr += ` (${l.addition0.value})`;
+            }
+          } else if (jibunAddr && jibunAddr.region && jibunAddr.land) {
+            // 지번 주소
+            const r = jibunAddr.region;
+            const l = jibunAddr.land;
+            addr = `${r.area1.name} ${r.area2.name} ${r.area3.name}`;
+            
+            if (r.area4 && r.area4.name) {
+              addr += ` ${r.area4.name}`;
+            }
+            
+            addr += ` ${l.number1}`;
+            if (l.number2) {
+              addr += `-${l.number2}`;
+            }
+          } else if (response.v2.results[0] && response.v2.results[0].region) {
             // 행정구역만
-            addr = `${region.area1.name} ${region.area2.name} ${region.area3.name}`;
+            const r = response.v2.results[0].region;
+            addr = `${r.area1.name} ${r.area2.name} ${r.area3.name}`;
+            if (r.area4 && r.area4.name) {
+              addr += ` ${r.area4.name}`;
+            }
           } else {
             addr = `위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`;
           }
