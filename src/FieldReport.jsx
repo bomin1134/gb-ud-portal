@@ -77,6 +77,7 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [measurements, setMeasurements] = useState({});
   const [memo, setMemo] = useState('');
+  const [photos, setPhotos] = useState([]);
   
   // 저장된 데이터
   const [savedReports, setSavedReports] = useState([]);
@@ -217,6 +218,36 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
     }));
   };
 
+  // 사진 추가
+  const handleAddPhoto = (e) => {
+    const files = Array.from(e.target.files || []);
+    
+    files.forEach(file => {
+      if (photos.length >= 4) {
+        alert('최대 4장까지만 업로드할 수 있습니다.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setPhotos(prev => [...prev, {
+          id: Date.now() + Math.random(),
+          src: event.target.result,
+          file: file
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // input 초기화
+    e.target.value = '';
+  };
+
+  // 사진 삭제
+  const handleRemovePhoto = (photoId) => {
+    setPhotos(prev => prev.filter(p => p.id !== photoId));
+  };
+
   // 저장
   const handleSave = async () => {
     if (!selectedItem || !location) {
@@ -271,6 +302,7 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
       setSelectedItem(null);
       setMeasurements({});
       setMemo('');
+      setPhotos([]);
     } catch (error) {
       console.error('저장 실패:', error);
       
@@ -427,6 +459,67 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
                 />
               </div>
 
+              {/* 사진 업로드 */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium mb-2">
+                  📸 사진 업로드 ({photos.length}/4)
+                </label>
+                
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {/* 앨범 선택 */}
+                  <label className="flex items-center justify-center p-3 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleAddPhoto}
+                      className="hidden"
+                      disabled={photos.length >= 4}
+                    />
+                    <div className="text-center">
+                      <div className="text-lg">🖼️</div>
+                      <div className="text-xs font-medium">앨범</div>
+                    </div>
+                  </label>
+
+                  {/* 카메라 촬영 */}
+                  <label className="flex items-center justify-center p-3 border-2 border-dashed border-green-300 rounded-lg cursor-pointer hover:bg-green-50">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleAddPhoto}
+                      className="hidden"
+                      disabled={photos.length >= 4}
+                    />
+                    <div className="text-center">
+                      <div className="text-lg">📷</div>
+                      <div className="text-xs font-medium">카메라</div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* 업로드된 사진 미리보기 */}
+                {photos.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {photos.map(photo => (
+                      <div key={photo.id} className="relative">
+                        <img
+                          src={photo.src}
+                          alt="업로드된 사진"
+                          className="w-full h-24 object-cover rounded-lg"
+                        />
+                        <button
+                          onClick={() => handleRemovePhoto(photo.id)}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleSave}
                 className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700"
