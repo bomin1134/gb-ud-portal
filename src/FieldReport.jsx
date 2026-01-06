@@ -329,13 +329,10 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
           <div className="absolute top-4 left-4 right-4 bg-white rounded-lg shadow-lg p-3">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <p className="text-xs text-gray-500">현재 위치</p>
-                <p className="font-medium text-sm">{address}</p>
-                {location && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-                  </p>
-                )}
+                <p className="text-xs text-gray-500">📍 현재 위치</p>
+                <p className="font-medium text-base text-gray-800">
+                  {address && address !== '주소를 불러오는 중...' ? address : '위치 확인 중...'}
+                </p>
               </div>
               <button
                 onClick={handleMoveToCurrentLocation}
