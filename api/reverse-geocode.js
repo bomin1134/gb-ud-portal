@@ -30,18 +30,22 @@ export default async function handler(req, res) {
 
   try {
     const coords = `${lng},${lat}`;
-    const url = `https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
+    const url = `https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc?coords=${coords}&orders=addr,roadaddr&output=json`;
 
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'X-NCP-APIGW-API-KEY-ID': clientId,
-        'X-NCP-APIGW-API-KEY': clientSecret
+        'X-NCP-APIGW-API-KEY': clientSecret,
+        'Accept': 'application/json'
       }
     });
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: 'Naver API error' });
+      console.error('Naver API error:', response.status, response.statusText);
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      return res.status(response.status).json({ error: `Naver API error: ${response.statusText}` });
     }
 
     const data = await response.json();
