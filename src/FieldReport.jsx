@@ -81,6 +81,8 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
   
   // 저장된 데이터
   const [savedReports, setSavedReports] = useState([]);
+  const [reportMarkers, setReportMarkers] = useState([]); // 저장된 리포트 마커들
+  const [selectedReport, setSelectedReport] = useState(null); // 선택된 리포트
 
   // 네이버 지도 초기화
   useEffect(() => {
@@ -144,6 +146,18 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
           // 주소 가져오기
           getAddressFromCoords(lat, lng);
           
+          // 줌 레벨 변경 이벤트 (부동산 레벨 17 이상에서만 마커 표시)
+          window.naver.maps.Event.addListener(mapInstance, 'zoom_changed', () => {
+            const zoom = mapInstance.getZoom();
+            reportMarkers.forEach(m => {
+              if (zoom >= 17) {
+                m.setMap(mapInstance);
+              } else {
+                m.setMap(null);
+              }
+            });
+          });
+          
           // 지도 클릭 이벤트
           window.naver.maps.Event.addListener(mapInstance, 'click', (e) => {
             const clickedLat = e.coord.lat();
@@ -152,6 +166,7 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
             setLocation({ lat: clickedLat, lng: clickedLng });
             markerInstance.setPosition(new window.naver.maps.LatLng(clickedLat, clickedLng));
             getAddressFromCoords(clickedLat, clickedLng);
+            setSelectedReport(null); // 새 위치 선택 시 상세 정보 닫기
           });
         },
         (error) => {
@@ -336,6 +351,25 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
           user_id: user.id,
           branch_id: user.branchId,
           category: selectedCategory.name,
+      // 지도에 마커 추가
+      if (map) {
+        const newMarker = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(location.lat, location.lng),
+          map: map.getZoom() >= 17 ? map : null, // 줌 레벨 17 이상일 때만 표시
+          icon: {
+            content: '<div style="background: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: pointer;"></div>',
+            anchor: new window.naver.maps.Point(8, 8)
+          }
+        });
+        
+        // 마커 클릭 이벤트
+        window.naver.maps.Event.addListener(newMarker, 'click', () => {
+          setSelectedReport(report);
+        });
+        
+        setReportMarkers([...reportMarkers, newMarker]);
+      }
+      
           item_name: selectedItem.label,
           latitude: location.lat,
           longitude: location.lng,
@@ -408,7 +442,41 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
       {/* 메인 컨텐츠 */}
       <div className="flex-1 overflow-hidden flex">
         {/* 지도 영역 */}
-        <div className="flex-1 relative">
+        <div cla
+          
+          {/* 선택된 리포트 상세 정보 */}
+          {selectedReport && (
+            <div className="absolute bottom-4 left-4 right-4 bg-white rounded-lg shadow-lg p-4">
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <h3 className="font-bold text-lg">{selectedReport.category}</h3>
+                  <p className="text-sm text-gray-600">{selectedReport.item}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">📍 {selectedReport.address}</p>
+              <div className="text-sm">
+                {Object.entries(selectedReport.measurements).map(([key, value]) => (
+                  <p key={key} className="text-gray-700">
+                    <span className="font-medium">{key}:</span> {value}
+                  </p>
+                ))}
+              </div>
+              {selectedReport.memo && (
+                <p className="text-sm text-gray-600 mt-2 pt-2 border-t">
+                  💬 {selectedReport.memo}
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                {new Date(selectedReport.timestamp).toLocaleString('ko-KR')}
+              </p>
+            </div>
+          )}ssName="flex-1 relative">
           <div ref={mapRef} className="w-full h-full" />
           
           {/* 위치 정보 오버레이 */}
