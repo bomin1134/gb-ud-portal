@@ -21,8 +21,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing lat or lng parameters' });
   }
 
-  const clientId = process.env.VITE_NAVER_MAP_CLIENT_ID;
-  const clientSecret = process.env.VITE_NAVER_MAP_CLIENT_SECRET;
+  const clientId = process.env.NAVER_MAP_CLIENT_ID || process.env.VITE_NAVER_MAP_CLIENT_ID;
+  const clientSecret = process.env.NAVER_MAP_CLIENT_SECRET || process.env.VITE_NAVER_MAP_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     return res.status(500).json({ error: 'Missing Naver Map credentials' });
