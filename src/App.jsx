@@ -1,6 +1,7 @@
-// src/App.jsx — v0.6 (관리자 탭 + 공지사항 + 속도개선)
+// src/App.jsx — v0.7 (현장 입력 기능 추가)
 import React, { useEffect, useState, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
+import FieldReport from "./FieldReport";
 
 /*
   변경점 (v0.6)
@@ -738,7 +739,7 @@ function SubmissionDetail({branch,week,rec,store,onBack,onEdit}){
 }
 
 // ----------------------------- 지회 홈 -----------------------------
-function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,refreshKey}){
+function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,onOpenField,refreshKey}){
   const [rows,setRows]=useState([]);
   const [tab,setTab]=useState('list'); // 'list' | 'notice'
 
@@ -782,7 +783,12 @@ function BranchHome({branch,store,isAdmin,onAdminBack,onOpenSubmit,onOpenDetail,
           <h1 className="text-2xl font-extrabold text-neutral-900">{branch.name} — 제출현황</h1>
         </div>
         <div className="flex items-center gap-3">
-          {tab==='list' && <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>}
+          {tab==='list' && (
+            <>
+              <Btn variant="soft" onClick={()=>onOpenField?.()}>📍 현장 입력</Btn>
+              <Btn variant="primary" onClick={()=>onOpenSubmit(null)}>제출하기</Btn>
+            </>
+          )}
         </div>
       </div>
 
@@ -1072,6 +1078,7 @@ export default function App(){
             onAdminBack={()=>setView("ADMIN")}
             onOpenSubmit={(w)=>{ setInitialWeekId(w||null); setView("SUBMIT"); }}
             onOpenDetail={(w)=>{ setDetailWeekId(w); setView("DETAIL"); }}
+            onOpenField={()=>setView("FIELD")}
             refreshKey={refreshKey}
           />
         )}
@@ -1091,6 +1098,14 @@ export default function App(){
             weekId={detailWeekId}
             onBack={()=>setView("BRANCH")}
             onEdit={()=>{ setInitialWeekId(detailWeekId); setView("SUBMIT"); }}
+          />
+        )}
+        {view==="FIELD" && (
+          <FieldReport
+            user={user}
+            branch={branch}
+            supabase={store.storeType==="supabase" ? createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY) : null}
+            onBack={()=>setView("BRANCH")}
           />
         )}
       </main>
