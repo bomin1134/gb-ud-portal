@@ -189,26 +189,33 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
             window.naver.maps.Service.OrderType.ROAD_ADDR
           ].join(',')
         }, (status, response) => {
-          if (status === window.naver.maps.Service.Status.ERROR) {
+          console.log('Geocoder 응답:', { status, response });
+          
+          if (status !== window.naver.maps.Service.Status.OK) {
             console.error('Geocoder 오류:', status);
             setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
             return;
           }
 
-          if (response.v2.meta.totalCount === 0) {
+          // 안전한 응답 체크
+          if (!response || !response.v2 || !response.v2.results || response.v2.results.length === 0) {
             setAddress(`위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`);
             return;
           }
 
-          const item = response.v2.address;
+          // 첫 번째 결과 사용
+          const result = response.v2.results[0];
+          const region = result.region;
           let addr = '';
           
-          if (item.roadAddress) {
-            addr = item.roadAddress;
-          } else if (item.jibunAddress) {
-            addr = item.jibunAddress;
+          // 도로명 주소 우선
+          if (result.land && result.land.name) {
+            addr = `${region.area1.name} ${region.area2.name} ${region.area3.name} ${result.land.name} ${result.land.number1}`;
+          } else if (region) {
+            // 행정구역만
+            addr = `${region.area1.name} ${region.area2.name} ${region.area3.name}`;
           } else {
-            addr = `${item.area1.name} ${item.area2.name} ${item.area3.name}`;
+            addr = `위도: ${lat.toFixed(4)}, 경도: ${lng.toFixed(4)}`;
           }
           
           setAddress(addr);
