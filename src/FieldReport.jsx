@@ -179,7 +179,7 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
     try {
       const response = await fetch(`/api/reverse-geocode?lat=${lat}&lng=${lng}`);
       if (!response.ok) {
-        setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
+        setAddress('주소를 불러올 수 없습니다');
         return;
       }
       
@@ -193,11 +193,11 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
       } else if (result && result.name) {
         setAddress(result.name);
       } else {
-        setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
+        setAddress('주소를 불러올 수 없습니다');
       }
     } catch (error) {
       console.error('주소 조회 오류:', error);
-      setAddress(`위도: ${lat.toFixed(6)}, 경도: ${lng.toFixed(6)}`);
+      setAddress('주소를 불러올 수 없습니다');
     }
   };
 
