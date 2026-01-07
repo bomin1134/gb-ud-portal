@@ -347,38 +347,41 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
       // Supabase에 저장
       const { data, error } = await supabase
         .from('field_reports')
-        .insert([{
-          user_id: user.id,
-          branch_id: user.branchId,
-          category: selectedCategory.name,
-      // 지도에 마커 추가
+        .insert([
+          {
+            user_id: user.id,
+            branch_id: user.branchId,
+            category: selectedCategory.name,
+            item_name: selectedItem.label,
+            latitude: location.lat,
+            longitude: location.lng,
+            address: address,
+            measurements: measurements,
+            memo: memo
+          }
+        ]);
+
+      if (error) throw error;
+
+      // 지도에 마커 추가 (저장 성공 시)
       if (map) {
         const newMarker = new window.naver.maps.Marker({
           position: new window.naver.maps.LatLng(location.lat, location.lng),
           map: map.getZoom() >= 17 ? map : null, // 줌 레벨 17 이상일 때만 표시
           icon: {
-            content: '<div style="background: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: pointer;"></div>',
+            content:
+              '<div style="background: #3b82f6; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); cursor: pointer;"></div>',
             anchor: new window.naver.maps.Point(8, 8)
           }
         });
-        
+
         // 마커 클릭 이벤트
         window.naver.maps.Event.addListener(newMarker, 'click', () => {
           setSelectedReport(report);
         });
-        
+
         setReportMarkers([...reportMarkers, newMarker]);
       }
-      
-          item_name: selectedItem.label,
-          latitude: location.lat,
-          longitude: location.lng,
-          address: address,
-          measurements: measurements,
-          memo: memo
-        }]);
-
-      if (error) throw error;
 
       // 로컬 상태 업데이트
       setSavedReports([report, ...savedReports]);
@@ -442,8 +445,9 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
       {/* 메인 컨텐츠 */}
       <div className="flex-1 overflow-hidden flex">
         {/* 지도 영역 */}
-        <div cla
-          
+        <div className="flex-1 relative">
+          <div ref={mapRef} className="w-full h-full" />
+
           {/* 선택된 리포트 상세 정보 */}
           {selectedReport && (
             <div className="absolute bottom-4 left-4 right-4 bg-white rounded-lg shadow-lg p-4">
@@ -476,9 +480,8 @@ export default function FieldReport({ user, branch, supabase, onBack }) {
                 {new Date(selectedReport.timestamp).toLocaleString('ko-KR')}
               </p>
             </div>
-          )}ssName="flex-1 relative">
-          <div ref={mapRef} className="w-full h-full" />
-          
+          )}
+
           {/* 위치 정보 오버레이 */}
           <div className="absolute top-4 left-4 right-4 bg-white rounded-lg shadow-lg p-3">
             <div className="flex items-center justify-between">
